@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Pill, Stethoscope, FileText, HeartPulse, Phone, Clock, AlertCircle, Bell, Sparkles, ChevronRight } from "lucide-react";
+import { CalendarDays, Pill, Stethoscope, FileText, HeartPulse, Phone, Clock, AlertCircle, Bell, Sparkles, ChevronRight, ChevronDown } from "lucide-react";
 import { Link } from "wouter";
 import type { Appointment, Medication, Physician, MedicalRecord, Vital, EmergencyContact } from "@shared/schema";
 import { usePatient } from "@/lib/patient-context";
@@ -40,6 +41,8 @@ export default function Dashboard() {
   const { data: vitals = [] } = useQuery<Vital[]>({ queryKey: ["vitals", pid], queryFn: () => getVitals(pid) });
   const { data: contacts = [] } = useQuery<EmergencyContact[]>({ queryKey: ["emergencyContacts", pid], queryFn: () => getEmergencyContacts(pid) });
 
+  const [medsExpanded, setMedsExpanded] = useState(true);
+
   const today = new Date().toISOString().split("T")[0];
   const upcoming = appointments.filter(
     (a) => a.status === "upcoming" && a.date >= today
@@ -52,10 +55,11 @@ export default function Dashboard() {
     return isBefore(refill, addDays(new Date(), 7)) && isAfter(refill, addDays(new Date(), -1));
   });
 
-  const reminders = appointments.filter((a) => {
-    if (!a.reminderDate || a.status !== "upcoming") return false;
-    return a.reminderDate <= today;
-  }).sort((a, b) => a.date.localeCompare(b.date));
+  const reminderIds = new Set(
+    appointments
+      .filter((a) => a.reminderDate && a.status === "upcoming" && a.reminderDate <= today)
+      .map((a) => a.id),
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-6xl">
@@ -105,40 +109,6 @@ export default function Dashboard() {
         <StatCard title="Records" value={records.length} icon={FileText} href="/records" />
       </div>
 
-      {reminders.length > 0 && (
-        <Card className="border-primary/30 bg-primary/5 dark:bg-primary/10">
-          <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
-              <Bell className="w-4 h-4 text-primary" />
-              Appointment Reminders
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {reminders.map((apt) => {
-              const doc = physicians.find((p) => p.id === apt.physicianId);
-              return (
-                <div key={apt.id} className="flex items-center gap-3 p-2 rounded-md bg-card" data-testid={`reminder-apt-${apt.id}`}>
-                  <div className="w-10 h-10 rounded-md gradient-primary flex items-center justify-center flex-shrink-0">
-                    <Bell className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">{apt.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {format(parseISO(apt.date), "MMM d, yyyy")} at {apt.time}
-                      {doc ? ` · ${doc.name}` : ""}
-                    </p>
-                    {apt.location && (
-                      <p className="text-xs text-muted-foreground truncate">{apt.location}</p>
-                    )}
-                  </div>
-                  <Badge variant="secondary" className="text-xs flex-shrink-0">{apt.type}</Badge>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -159,15 +129,19 @@ export default function Dashboard() {
             ) : (
               upcoming.map((apt) => {
                 const doc = physicians.find((p) => p.id === apt.physicianId);
+                const isReminder = reminderIds.has(apt.id);
                 return (
-                  <div key={apt.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary/50" data-testid={`upcoming-apt-${apt.id}`}>
+                  <div key={apt.id} className={`flex items-center gap-3 p-2 rounded-md ${isReminder ? "bg-primary/10 border border-primary/30" : "bg-secondary/50"}`} data-testid={`upcoming-apt-${apt.id}`}>
                     <div className="w-10 h-10 rounded-md gradient-primary flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-xs font-heading font-bold">
                         {format(parseISO(apt.date), "dd")}
                       </span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{apt.title}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold truncate">{apt.title}</p>
+                        {isReminder && <Bell className="w-3 h-3 text-primary flex-shrink-0" />}
+                      </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {format(parseISO(apt.date), "MMM d")} at {apt.time}
                         {doc ? ` · ${doc.name}` : ""}
@@ -182,58 +156,95 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
-              <Pill className="w-4 h-4 text-primary" />
-              Medication Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {refillSoon.length > 0 && (
-              <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 mb-3">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <p className="text-xs font-semibold">Refills Needed Soon</p>
-                </div>
-                {refillSoon.map((m) => (
-                  <p key={m.id} className="text-xs text-amber-600 dark:text-amber-400/80 mt-1 ml-6">
-                    {m.name} — refill by {format(parseISO(m.refillDate!), "MMM d")}
-                  </p>
-                ))}
-              </div>
-            )}
-            {activeMeds.length === 0 ? (
-              <div className="text-center py-6">
-                <Pill className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">No active medications</p>
-                <Link href="/medications" className="text-xs text-primary hover:underline mt-1 inline-block">
-                  Add medication
-                </Link>
-              </div>
-            ) : (
-              activeMeds.slice(0, 5).map((med) => (
-                <div key={med.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary/50" data-testid={`med-summary-${med.id}`}>
-                  <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-                    <Pill className="w-4 h-4 text-white" />
+          <button
+            onClick={() => setMedsExpanded((v) => !v)}
+            className="w-full text-left"
+            data-testid="button-toggle-meds-summary"
+            aria-expanded={medsExpanded}
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
+                <Pill className="w-4 h-4 text-primary" />
+                Medication Summary
+                <ChevronDown className={`w-4 h-4 ml-auto text-muted-foreground transition-transform ${medsExpanded ? "" : "-rotate-90"}`} />
+              </CardTitle>
+            </CardHeader>
+          </button>
+          {medsExpanded && (
+            <CardContent className="space-y-2">
+              {refillSoon.length > 0 && (
+                <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 mb-3">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <p className="text-xs font-semibold">Refills Needed Soon</p>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">{med.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {med.dosage} · {med.frequency}
+                  {refillSoon.map((m) => (
+                    <p key={m.id} className="text-xs text-amber-600 dark:text-amber-400/80 mt-1 ml-6">
+                      {m.name} — refill by {format(parseISO(m.refillDate!), "MMM d")}
                     </p>
-                  </div>
+                  ))}
                 </div>
-              ))
-            )}
-          </CardContent>
+              )}
+              {activeMeds.length === 0 ? (
+                <div className="text-center py-6">
+                  <Pill className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">No active medications</p>
+                  <Link href="/medications" className="text-xs text-primary hover:underline mt-1 inline-block">
+                    Add medication
+                  </Link>
+                </div>
+              ) : (
+                activeMeds.slice(0, 5).map((med) => (
+                  <div key={med.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary/50" data-testid={`med-summary-${med.id}`}>
+                    <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
+                      <Pill className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{med.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {med.dosage} · {med.frequency}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          )}
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <StatCard title="Vitals Logged" value={vitals.length} icon={HeartPulse} href="/vitals" />
         <StatCard title="Emergency Contacts" value={contacts.length} icon={Phone} href="/emergency" />
-        <StatCard title="Total Records" value={records.length} icon={FileText} href="/records" />
       </div>
+
+      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
+              <Bell className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-heading text-sm font-bold">Phone Reminders</h3>
+                <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">Full version</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 font-body leading-relaxed">
+                Get push notifications on your phone before appointments and when refills are due. Available in the full app once you add it to your Home Screen — no account or sign-in required.
+              </p>
+              <button
+                type="button"
+                disabled
+                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground cursor-not-allowed opacity-70"
+                data-testid="button-phone-reminders-disabled"
+                title="Phone reminders are available in the full version"
+              >
+                Enable phone reminders <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

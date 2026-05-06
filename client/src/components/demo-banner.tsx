@@ -7,7 +7,7 @@ export default function DemoBanner() {
       }}
     >
       <span className="truncate">
-        &#9733; DEMO VERSION &mdash; features are fully interactive but data resets on refresh
+        &#9733; DEMO VERSION &mdash; data resets on refresh &middot; phone reminders are a full-version feature
       </span>
       <a
         href="https://www.etsy.com/listing/4487743018/medical-records-keeper-app"
