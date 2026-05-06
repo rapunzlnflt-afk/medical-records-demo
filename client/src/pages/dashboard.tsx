@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Pill, Stethoscope, FileText, HeartPulse, Phone, Clock, AlertCircle, Bell, Sparkles, ChevronRight, ChevronDown } from "lucide-react";
+import { CalendarDays, Pill, Stethoscope, FileText, HeartPulse, Phone, Clock, AlertCircle, Bell, Sparkles, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import type { Appointment, Medication, Physician, MedicalRecord, Vital, EmergencyContact } from "@shared/schema";
 import { usePatient } from "@/lib/patient-context";
@@ -40,8 +39,6 @@ export default function Dashboard() {
   const { data: records = [] } = useQuery<MedicalRecord[]>({ queryKey: ["medicalRecords", pid], queryFn: () => getMedicalRecords(pid) });
   const { data: vitals = [] } = useQuery<Vital[]>({ queryKey: ["vitals", pid], queryFn: () => getVitals(pid) });
   const { data: contacts = [] } = useQuery<EmergencyContact[]>({ queryKey: ["emergencyContacts", pid], queryFn: () => getEmergencyContacts(pid) });
-
-  const [medsExpanded, setMedsExpanded] = useState(true);
 
   const today = new Date().toISOString().split("T")[0];
   const upcoming = appointments.filter(
@@ -156,60 +153,50 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <button
-            onClick={() => setMedsExpanded((v) => !v)}
-            className="w-full text-left"
-            data-testid="button-toggle-meds-summary"
-            aria-expanded={medsExpanded}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
-                <Pill className="w-4 h-4 text-primary" />
-                Medication Summary
-                <ChevronDown className={`w-4 h-4 ml-auto text-muted-foreground transition-transform ${medsExpanded ? "" : "-rotate-90"}`} />
-              </CardTitle>
-            </CardHeader>
-          </button>
-          {medsExpanded && (
-            <CardContent className="space-y-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-primary" />
+              Refill Overview
               {refillSoon.length > 0 && (
-                <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 mb-3">
-                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <p className="text-xs font-semibold">Refills Needed Soon</p>
-                  </div>
-                  {refillSoon.map((m) => (
-                    <p key={m.id} className="text-xs text-amber-600 dark:text-amber-400/80 mt-1 ml-6">
-                      {m.name} — refill by {format(parseISO(m.refillDate!), "MMM d")}
-                    </p>
-                  ))}
-                </div>
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {refillSoon.length} due soon
+                </Badge>
               )}
-              {activeMeds.length === 0 ? (
-                <div className="text-center py-6">
-                  <Pill className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                  <p className="text-sm text-muted-foreground">No active medications</p>
-                  <Link href="/medications" className="text-xs text-primary hover:underline mt-1 inline-block">
-                    Add medication
-                  </Link>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {activeMeds.length === 0 ? (
+              <div className="text-center py-6">
+                <Pill className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">No active medications</p>
+                <Link href="/medications" className="text-xs text-primary hover:underline mt-1 inline-block">
+                  Add medication
+                </Link>
+              </div>
+            ) : refillSoon.length > 0 ? (
+              <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-950/30">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <p className="text-xs font-semibold">Refills Needed Soon</p>
                 </div>
-              ) : (
-                activeMeds.slice(0, 5).map((med) => (
-                  <div key={med.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary/50" data-testid={`med-summary-${med.id}`}>
-                    <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-                      <Pill className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{med.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {med.dosage} · {med.frequency}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          )}
+                {refillSoon.map((m) => (
+                  <p key={m.id} className="text-xs text-amber-600 dark:text-amber-400/80 mt-1 ml-6" data-testid={`refill-${m.id}`}>
+                    {m.name} — refill by {format(parseISO(m.refillDate!), "MMM d")}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-3 rounded-md bg-secondary/50">
+                <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">All refills up to date</p>
+                  <p className="text-xs text-muted-foreground">
+                    {activeMeds.length} active medication{activeMeds.length === 1 ? "" : "s"} · no refills due in the next 7 days
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
         </Card>
       </div>
 
