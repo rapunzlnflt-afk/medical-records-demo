@@ -320,7 +320,12 @@ function FormFooter({ onCancel, onSave, saveLabel, disabled }: {
       className="sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur px-4 sm:px-6 py-3 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end"
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
     >
-      <Button variant="outline" onClick={onCancel} className="h-12 text-base w-full sm:w-auto sm:min-w-[140px]">
+      <Button
+        variant="outline"
+        onClick={onCancel}
+        className="h-12 text-base w-full sm:w-auto sm:min-w-[140px]"
+        data-testid="button-profile-cancel"
+      >
         Cancel
       </Button>
       <Button
