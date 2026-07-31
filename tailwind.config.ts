@@ -9,6 +9,14 @@ export default {
         heading: ["Montserrat", "sans-serif"],
         body: ["Karla", "sans-serif"],
       },
+      zIndex: {
+        // The demo's two promo banners sit at 9999 (one fixed in index.html, one
+        // a flex item in demo-banner.tsx). Modals must out-rank both or their
+        // controls get painted over. Dropdowns opened from inside a modal must in
+        // turn out-rank the modal.
+        modal: "10000",
+        "modal-popover": "10001",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

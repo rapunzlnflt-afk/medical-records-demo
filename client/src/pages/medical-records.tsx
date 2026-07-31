@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { MedicalRecord, Physician } from "@shared/schema";
 import { format, parseISO } from "date-fns";
+import { fileToStorableDataUrl, FILE_UPLOAD_ACCEPT, IMAGE_READ_ERROR } from "@/lib/image";
 
 const CATEGORIES = [
   { value: "lab-results", label: "Lab Results", icon: FlaskConical },
@@ -59,6 +60,7 @@ function RecordForm({ physicians, initial, onSubmit, onCancel }: {
     isExternalUrl ? "link" : "upload"
   );
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(
     isDataUrl ? (initial?.imageUrl ?? null) : null
   );
@@ -68,17 +70,13 @@ function RecordForm({ physicians, initial, onSubmit, onCancel }: {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadError(null);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const dataUrl = await fileToStorableDataUrl(file);
       setForm((prev) => ({ ...prev, imageUrl: dataUrl }));
       setUploadPreview(dataUrl);
-    } catch {
-      // Show inline error silently
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : IMAGE_READ_ERROR);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -88,6 +86,7 @@ function RecordForm({ physicians, initial, onSubmit, onCancel }: {
   const clearPhoto = () => {
     setForm((prev) => ({ ...prev, imageUrl: "" }));
     setUploadPreview(null);
+    setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -167,11 +166,16 @@ function RecordForm({ physicians, initial, onSubmit, onCancel }: {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,application/pdf"
+                accept={FILE_UPLOAD_ACCEPT}
                 onChange={handleFileUpload}
                 className="hidden"
                 data-testid="input-photo-file"
               />
+              {uploadError && (
+                <p className="text-xs text-destructive break-words" data-testid="text-photo-error">
+                  {uploadError}
+                </p>
+              )}
               <button
                 type="button"
                 className="text-xs text-primary hover:underline font-body"
