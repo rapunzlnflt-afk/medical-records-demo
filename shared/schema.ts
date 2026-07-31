@@ -15,8 +15,8 @@ export interface Patient {
   allergies?: string | null;
   conditions?: string | null;
   primaryPhysicianId?: number | null;
-  // Insurance card — one per family member. Front/back are downscaled JPEG
-  // data URLs (see client/src/lib/image.ts).
+  // Medical insurance card — one per family member. Front/back are downscaled
+  // JPEG data URLs (see client/src/lib/image.ts).
   insuranceCardFront?: string | null;
   insuranceCardBack?: string | null;
   insuranceCarrier?: string | null;
@@ -29,6 +29,17 @@ export interface Patient {
   insurancePhone?: string | null;
   insurancePolicyHolder?: string | null;
   insuranceEffectiveDate?: string | null;
+  // Dental insurance card. Same shape minus the pharmacy fields, which are
+  // medical-only.
+  dentalCardFront?: string | null;
+  dentalCardBack?: string | null;
+  dentalCarrier?: string | null;
+  dentalMemberId?: string | null;
+  dentalGroupNumber?: string | null;
+  dentalPlanType?: string | null;
+  dentalPhone?: string | null;
+  dentalPolicyHolder?: string | null;
+  dentalEffectiveDate?: string | null;
 }
 
 export interface Physician {

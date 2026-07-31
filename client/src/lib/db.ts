@@ -3,7 +3,10 @@ import type {
   Patient, Physician, Appointment, Medication, MedicationLog,
   MedicalRecord, Vital, EmergencyContact, Pharmacy,
 } from "@shared/schema";
-import { SAMPLE_CARD_BACK, SAMPLE_CARD_FRONT } from "./demo-cards";
+import {
+  SAMPLE_DENTAL_CARD_BACK, SAMPLE_DENTAL_CARD_FRONT,
+  SAMPLE_MEDICAL_CARD_BACK, SAMPLE_MEDICAL_CARD_FRONT,
+} from "./demo-cards";
 
 class MedicalRecordsDB extends Dexie {
   patients!: Table<Patient, number>;
@@ -52,8 +55,8 @@ export async function ensureDemoData(): Promise<void> {
     height: `5'7"`,
     allergies: "Penicillin (hives), shellfish",
     conditions: "Seasonal asthma — rescue inhaler as needed",
-    insuranceCardFront: SAMPLE_CARD_FRONT,
-    insuranceCardBack: SAMPLE_CARD_BACK,
+    insuranceCardFront: SAMPLE_MEDICAL_CARD_FRONT,
+    insuranceCardBack: SAMPLE_MEDICAL_CARD_BACK,
     insuranceCarrier: "Northwind Mutual Health",
     insurancePlanType: "PPO Family",
     insuranceMemberId: "SMPL-0123-4567",
@@ -64,6 +67,15 @@ export async function ensureDemoData(): Promise<void> {
     insurancePhone: "(555) 018-2400",
     insurancePolicyHolder: "Jamie Rivera",
     insuranceEffectiveDate: "2026-01-01",
+    dentalCardFront: SAMPLE_DENTAL_CARD_FRONT,
+    dentalCardBack: SAMPLE_DENTAL_CARD_BACK,
+    dentalCarrier: "Silverpine Dental Guild",
+    dentalPlanType: "DPPO Family",
+    dentalMemberId: "SMPL-DEN-7788",
+    dentalGroupNumber: "SAMPLE-D002",
+    dentalPhone: "(555) 019-3300",
+    dentalPolicyHolder: "Jamie Rivera",
+    dentalEffectiveDate: "2026-01-01",
   });
 
   const physicianId = await db.physicians.add({

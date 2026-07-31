@@ -18,8 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  ArrowLeft, Camera, Edit2, IdCard, Phone, Stethoscope, UserRound,
-  X, ZoomIn, ZoomOut,
+  ArrowLeft, Camera, Edit2, IdCard, Phone, Smile, Stethoscope, UserRound,
 } from "lucide-react";
 import { Link } from "wouter";
 import { differenceInYears, format, parseISO } from "date-fns";
@@ -27,6 +26,7 @@ import type { Patient, Physician } from "@shared/schema";
 import { formatPhone } from "@/lib/format-phone";
 import { formatPersonName } from "@/lib/format-name";
 import { fileToStorableDataUrl, IMAGE_READ_ERROR, IMAGE_UPLOAD_ACCEPT } from "@/lib/image";
+import { DetailRow, InsuranceCardSection } from "@/components/insurance-card-section";
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"];
 
@@ -37,11 +37,6 @@ const PROFILE_DIALOG_CLASS =
   "p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
   "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[min(640px,calc(100vw-2rem))] sm:max-w-[640px] sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:border " +
   "overflow-hidden flex flex-col";
-
-const VIEWER_DIALOG_CLASS =
-  "p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
-  "sm:left-0 sm:right-0 sm:top-0 sm:w-screen sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-none sm:p-0 " +
-  "overflow-hidden flex flex-col bg-black text-white";
 
 /** Empty strings from form inputs are stored as null so absent fields stay absent. */
 function blankToNull(value: string): string | null {
@@ -58,6 +53,10 @@ function ageFromDob(dob: string | null | undefined): number | null {
 function formatDob(dob: string): string {
   const parsed = parseISO(dob);
   return Number.isNaN(parsed.getTime()) ? dob : format(parsed, "MMM d, yyyy");
+}
+
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
 function FieldSection({ icon: Icon, title, description, children }: {
@@ -79,152 +78,6 @@ function FieldSection({ icon: Icon, title, description, children }: {
       </header>
       <div className="px-4 sm:px-5 pb-5 pt-2 space-y-4">{children}</div>
     </section>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs font-body font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="text-base font-body mt-0.5 break-words">{value}</dd>
-    </div>
-  );
-}
-
-function FullScreenImage({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
-  const [zoomed, setZoomed] = useState(false);
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={VIEWER_DIALOG_CLASS}>
-        <DialogHeader className="px-4 py-3 text-left shrink-0 border-b border-white/15">
-          <DialogTitle className="font-heading text-base font-semibold text-white pr-8">{title}</DialogTitle>
-          <DialogDescription className="text-white/70 text-xs">
-            Show this at the check-in desk. Tap the image to zoom.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex-1 overflow-auto overscroll-contain">
-          <div className="min-w-full min-h-full flex items-center justify-center p-2">
-            <img
-              src={src}
-              alt={title}
-              onClick={() => setZoomed((z) => !z)}
-              className={zoomed ? "max-w-none w-[220%] cursor-zoom-out" : "max-w-full max-h-full object-contain cursor-zoom-in"}
-              data-testid="image-card-fullscreen"
-            />
-          </div>
-        </div>
-        <div
-          className="shrink-0 border-t border-white/15 px-4 py-3 flex gap-2 justify-center"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
-        >
-          <Button
-            variant="outline"
-            onClick={() => setZoomed((z) => !z)}
-            className="h-12 flex-1 max-w-[200px] text-base bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white"
-            data-testid="button-card-zoom"
-          >
-            {zoomed ? <ZoomOut className="w-5 h-5 mr-1.5" /> : <ZoomIn className="w-5 h-5 mr-1.5" />}
-            {zoomed ? "Fit to screen" : "Zoom in"}
-          </Button>
-          <Button
-            onClick={onClose}
-            className="h-12 flex-1 max-w-[200px] text-base font-semibold gradient-primary text-white border-none"
-            data-testid="button-card-close"
-          >
-            Close
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CardPhotoTile({ label, value, onChange, onView, testId }: {
-  label: string;
-  value: string | null | undefined;
-  onChange: (dataUrl: string | null) => void;
-  onView: () => void;
-  testId: string;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBusy(true);
-    setError(null);
-    try {
-      onChange(await fileToStorableDataUrl(file));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : IMAGE_READ_ERROR);
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <p className="text-sm font-body font-semibold">{label}</p>
-      {value ? (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={onView}
-            className="block w-full aspect-[1.586] rounded-lg border overflow-hidden bg-muted/30"
-            data-testid={`button-view-${testId}`}
-          >
-            <img src={value} alt={label} className="w-full h-full object-cover" />
-          </button>
-          <div className="absolute top-1.5 right-1.5 flex gap-1">
-            <Button
-              type="button" size="icon" variant="secondary"
-              className="w-8 h-8 rounded-full shadow"
-              onClick={() => inputRef.current?.click()}
-              aria-label={`Replace ${label}`}
-              data-testid={`button-replace-${testId}`}
-            >
-              <Camera className="w-4 h-4" />
-            </Button>
-            <Button
-              type="button" size="icon" variant="destructive"
-              className="w-8 h-8 rounded-full shadow"
-              onClick={() => onChange(null)}
-              aria-label={`Remove ${label}`}
-              data-testid={`button-remove-${testId}`}
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          className="w-full aspect-[1.586] min-h-[104px] rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1.5 px-2 text-center hover:bg-muted/30 transition-colors"
-          data-testid={`button-add-${testId}`}
-        >
-          <Camera className="w-6 h-6 text-muted-foreground/60" />
-          <span className="text-xs font-body text-muted-foreground leading-tight">
-            {busy ? "Processing…" : "Take or choose a photo"}
-          </span>
-        </button>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept={IMAGE_UPLOAD_ACCEPT}
-        onChange={handleFile}
-        className="hidden"
-        data-testid={`input-${testId}`}
-      />
-      {error && <p className="text-xs text-destructive break-words">{error}</p>}
-    </div>
   );
 }
 
@@ -478,136 +331,137 @@ function PersonalDetailsForm({ patient, physicians, onSubmit, onCancel }: {
   );
 }
 
-function InsuranceForm({ patient, onSubmit, onCancel }: {
+type CardField = {
+  /** Suffix for the input id and testid: "carrier" with prefix "ins" -> input-ins-carrier. */
+  name: string;
+  key: keyof Patient;
+  label: string;
+  placeholder?: string;
+  date?: boolean;
+  /** Serial-number-ish field: don't let the keyboard autocapitalise or autocorrect it. */
+  code?: boolean;
+  phone?: boolean;
+  personName?: boolean;
+};
+
+type CardFormSection = {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  fields: CardField[];
+};
+
+const MEDICAL_FORM_SECTIONS: CardFormSection[] = [
+  {
+    icon: IdCard,
+    title: "Plan",
+    description: "What's printed on the front of the card.",
+    fields: [
+      { name: "carrier", key: "insuranceCarrier", label: "Carrier / Plan Name", placeholder: "Evergreen Mutual Health" },
+      { name: "plan-type", key: "insurancePlanType", label: "Plan Type", placeholder: "PPO, HMO, Medicare Advantage..." },
+      { name: "member-id", key: "insuranceMemberId", label: "Member ID", placeholder: "XZY123456789", code: true },
+      { name: "group", key: "insuranceGroupNumber", label: "Group Number", placeholder: "000123456", code: true },
+      { name: "holder", key: "insurancePolicyHolder", label: "Policy Holder", placeholder: "Jane Doe", personName: true },
+      { name: "effective", key: "insuranceEffectiveDate", label: "Effective Date", date: true },
+    ],
+  },
+  {
+    icon: Phone,
+    title: "Pharmacy & Contact",
+    description: "The small print used at the pharmacy counter.",
+    fields: [
+      { name: "rxbin", key: "insuranceRxBin", label: "RxBIN", placeholder: "004336", code: true },
+      { name: "rxpcn", key: "insuranceRxPcn", label: "RxPCN", placeholder: "ADV", code: true },
+      { name: "rxgroup", key: "insuranceRxGroup", label: "RxGroup", placeholder: "RX1234", code: true },
+      { name: "phone", key: "insurancePhone", label: "Member Services Phone", placeholder: "(555) 123-4567", phone: true },
+    ],
+  },
+];
+
+// No RxBIN/RxPCN/RxGRP: those are pharmacy fields and are never on a dental card.
+const DENTAL_FORM_SECTIONS: CardFormSection[] = [
+  {
+    icon: Smile,
+    title: "Plan",
+    description: "What's printed on the front of the card.",
+    fields: [
+      { name: "carrier", key: "dentalCarrier", label: "Carrier / Plan Name", placeholder: "Cascade Dental Group" },
+      { name: "plan-type", key: "dentalPlanType", label: "Plan Type", placeholder: "DPPO, DHMO, discount plan..." },
+      { name: "member-id", key: "dentalMemberId", label: "Member ID", placeholder: "DEN123456789", code: true },
+      { name: "group", key: "dentalGroupNumber", label: "Group Number", placeholder: "000123456", code: true },
+      { name: "holder", key: "dentalPolicyHolder", label: "Policy Holder", placeholder: "Jane Doe", personName: true },
+      { name: "effective", key: "dentalEffectiveDate", label: "Effective Date", date: true },
+    ],
+  },
+  {
+    icon: Phone,
+    title: "Contact",
+    description: "Who to call about coverage or a claim.",
+    fields: [
+      { name: "phone", key: "dentalPhone", label: "Member Services Phone", placeholder: "(555) 123-4567", phone: true },
+    ],
+  },
+];
+
+function CardDetailsForm({ patient, sections, idPrefix, saveLabel, onSubmit, onCancel }: {
   patient: Patient;
+  sections: CardFormSection[];
+  idPrefix: string;
+  saveLabel: string;
   onSubmit: (data: Partial<Patient>) => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState({
-    insuranceCarrier: patient.insuranceCarrier || "",
-    insurancePlanType: patient.insurancePlanType || "",
-    insuranceMemberId: patient.insuranceMemberId || "",
-    insuranceGroupNumber: patient.insuranceGroupNumber || "",
-    insuranceRxBin: patient.insuranceRxBin || "",
-    insuranceRxPcn: patient.insuranceRxPcn || "",
-    insuranceRxGroup: patient.insuranceRxGroup || "",
-    insurancePhone: patient.insurancePhone || "",
-    insurancePolicyHolder: patient.insurancePolicyHolder || "",
-    insuranceEffectiveDate: patient.insuranceEffectiveDate || "",
-  });
+  const fields = sections.flatMap((s) => s.fields);
+  const [form, setForm] = useState<Record<string, string>>(() =>
+    Object.fromEntries(fields.map((f) => [f.name, (patient[f.key] as string | null | undefined) || ""])),
+  );
 
   const handleSave = () => {
-    onSubmit({
-      insuranceCarrier: blankToNull(form.insuranceCarrier),
-      insurancePlanType: blankToNull(form.insurancePlanType),
-      insuranceMemberId: blankToNull(form.insuranceMemberId),
-      insuranceGroupNumber: blankToNull(form.insuranceGroupNumber),
-      insuranceRxBin: blankToNull(form.insuranceRxBin),
-      insuranceRxPcn: blankToNull(form.insuranceRxPcn),
-      insuranceRxGroup: blankToNull(form.insuranceRxGroup),
-      insurancePhone: blankToNull(form.insurancePhone),
-      insurancePolicyHolder: form.insurancePolicyHolder.trim()
-        ? formatPersonName(form.insurancePolicyHolder.trim())
-        : null,
-      insuranceEffectiveDate: blankToNull(form.insuranceEffectiveDate),
-    });
+    const data: Record<string, string | null> = {};
+    for (const f of fields) {
+      const raw = form[f.name];
+      data[f.key] = f.personName && raw.trim() ? formatPersonName(raw.trim()) : blankToNull(raw);
+    }
+    onSubmit(data as Partial<Patient>);
   };
 
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5 bg-muted/20">
-        <FieldSection icon={IdCard} title="Plan" description="What's printed on the front of the card.">
-          <div className="space-y-2">
-            <Label htmlFor="ins-carrier" className={labelClass}>Carrier / Plan Name</Label>
-            <Input
-              id="ins-carrier" className={controlClass} value={form.insuranceCarrier}
-              onChange={(e) => setForm({ ...form, insuranceCarrier: e.target.value })}
-              placeholder="Evergreen Mutual Health" data-testid="input-ins-carrier"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-plan-type" className={labelClass}>Plan Type</Label>
-            <Input
-              id="ins-plan-type" className={controlClass} value={form.insurancePlanType}
-              onChange={(e) => setForm({ ...form, insurancePlanType: e.target.value })}
-              placeholder="PPO, HMO, Medicare Advantage..." data-testid="input-ins-plan-type"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-member-id" className={labelClass}>Member ID</Label>
-            <Input
-              id="ins-member-id" className={controlClass} value={form.insuranceMemberId}
-              onChange={(e) => setForm({ ...form, insuranceMemberId: e.target.value })}
-              autoCapitalize="characters" autoCorrect="off"
-              placeholder="XZY123456789" data-testid="input-ins-member-id"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-group" className={labelClass}>Group Number</Label>
-            <Input
-              id="ins-group" className={controlClass} value={form.insuranceGroupNumber}
-              onChange={(e) => setForm({ ...form, insuranceGroupNumber: e.target.value })}
-              autoCapitalize="characters" autoCorrect="off"
-              placeholder="000123456" data-testid="input-ins-group"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-holder" className={labelClass}>Policy Holder</Label>
-            <Input
-              id="ins-holder" className={controlClass} value={form.insurancePolicyHolder}
-              onChange={(e) => setForm({ ...form, insurancePolicyHolder: e.target.value })}
-              placeholder="Jane Doe" data-testid="input-ins-holder"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-effective" className={labelClass}>Effective Date</Label>
-            <Input
-              id="ins-effective" type="date" className={controlClass} value={form.insuranceEffectiveDate}
-              onChange={(e) => setForm({ ...form, insuranceEffectiveDate: e.target.value })}
-              data-testid="input-ins-effective"
-            />
-          </div>
-        </FieldSection>
-
-        <FieldSection icon={Phone} title="Pharmacy & Contact" description="The small print used at the pharmacy counter.">
-          <div className="space-y-2">
-            <Label htmlFor="ins-rxbin" className={labelClass}>RxBIN</Label>
-            <Input
-              id="ins-rxbin" className={controlClass} value={form.insuranceRxBin}
-              onChange={(e) => setForm({ ...form, insuranceRxBin: e.target.value })}
-              autoCapitalize="characters" autoCorrect="off"
-              placeholder="004336" data-testid="input-ins-rxbin"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-rxpcn" className={labelClass}>RxPCN</Label>
-            <Input
-              id="ins-rxpcn" className={controlClass} value={form.insuranceRxPcn}
-              onChange={(e) => setForm({ ...form, insuranceRxPcn: e.target.value })}
-              autoCapitalize="characters" autoCorrect="off"
-              placeholder="ADV" data-testid="input-ins-rxpcn"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-rxgroup" className={labelClass}>RxGroup</Label>
-            <Input
-              id="ins-rxgroup" className={controlClass} value={form.insuranceRxGroup}
-              onChange={(e) => setForm({ ...form, insuranceRxGroup: e.target.value })}
-              autoCapitalize="characters" autoCorrect="off"
-              placeholder="RX1234" data-testid="input-ins-rxgroup"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ins-phone" className={labelClass}>Member Services Phone</Label>
-            <Input
-              id="ins-phone" className={controlClass} inputMode="tel" value={form.insurancePhone}
-              onChange={(e) => setForm({ ...form, insurancePhone: formatPhone(e.target.value) })}
-              placeholder="(555) 123-4567" data-testid="input-ins-phone"
-            />
-          </div>
-        </FieldSection>
+        {sections.map((section) => (
+          <FieldSection
+            key={section.title}
+            icon={section.icon}
+            title={section.title}
+            description={section.description}
+          >
+            {section.fields.map((f) => {
+              const id = `${idPrefix}-${f.name}`;
+              return (
+                <div key={f.name} className="space-y-2">
+                  <Label htmlFor={id} className={labelClass}>{f.label}</Label>
+                  <Input
+                    id={id}
+                    className={controlClass}
+                    type={f.date ? "date" : "text"}
+                    inputMode={f.phone ? "tel" : undefined}
+                    autoCapitalize={f.code ? "characters" : undefined}
+                    autoCorrect={f.code ? "off" : undefined}
+                    value={form[f.name]}
+                    onChange={(e) => setForm((prev) => ({
+                      ...prev,
+                      [f.name]: f.phone ? formatPhone(e.target.value) : e.target.value,
+                    }))}
+                    placeholder={f.placeholder}
+                    data-testid={`input-${id}`}
+                  />
+                </div>
+              );
+            })}
+          </FieldSection>
+        ))}
       </div>
-      <FormFooter onCancel={onCancel} onSave={handleSave} saveLabel="Save Insurance" />
+      <FormFooter onCancel={onCancel} onSave={handleSave} saveLabel={saveLabel} />
     </div>
   );
 }
@@ -617,8 +471,7 @@ export default function Profile() {
   const pid = activePatientId;
   const { toast } = useToast();
   const [editingPersonal, setEditingPersonal] = useState(false);
-  const [editingInsurance, setEditingInsurance] = useState(false);
-  const [viewing, setViewing] = useState<"front" | "back" | null>(null);
+  const [editingCard, setEditingCard] = useState<"medical" | "dental" | null>(null);
 
   const { data: physicians = [] } = useQuery<Physician[]>({
     queryKey: ["physicians", pid],
@@ -630,7 +483,7 @@ export default function Profile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["patients"] });
       setEditingPersonal(false);
-      setEditingInsurance(false);
+      setEditingCard(null);
     },
     onError: () => {
       toast({ title: "Error", description: "Could not save. Please try again.", variant: "destructive" });
@@ -649,13 +502,6 @@ export default function Profile() {
 
   const age = ageFromDob(patient.dateOfBirth);
   const primaryDoc = physicians.find((p) => p.id === patient.primaryPhysicianId);
-  const viewingSrc = viewing === "front" ? patient.insuranceCardFront : patient.insuranceCardBack;
-  const hasInsuranceDetails = Boolean(
-    patient.insuranceCarrier || patient.insuranceMemberId || patient.insuranceGroupNumber ||
-    patient.insurancePlanType || patient.insuranceRxBin || patient.insuranceRxPcn ||
-    patient.insuranceRxGroup || patient.insurancePhone || patient.insurancePolicyHolder ||
-    patient.insuranceEffectiveDate,
-  );
 
   // pb-28 keeps the last control clear of the fixed promo banner in index.html.
   return (
@@ -666,7 +512,7 @@ export default function Profile() {
       <div className="min-w-0">
         <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight">Profile</h1>
         <p className="text-sm sm:text-base text-muted-foreground font-body mt-1.5">
-          Personal details and insurance card for {patient.name}
+          Personal details and insurance cards for {patient.name}
         </p>
       </div>
 
@@ -720,80 +566,84 @@ export default function Profile() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm">
-        <CardContent className="p-4 sm:p-5 space-y-4">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
-              <IdCard className="w-4 h-4 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-heading text-lg font-semibold leading-tight">Insurance Card</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Photograph both sides so you can show them at check-in, even offline.
-              </p>
-            </div>
-          </div>
+      <InsuranceCardSection
+        icon={IdCard}
+        title="Medical Insurance Card"
+        description="Photograph both sides so you can show them at check-in, even offline."
+        viewerNoun="Medical card"
+        tileTestIdPrefix="card"
+        editTestId="button-edit-insurance"
+        front={patient.insuranceCardFront}
+        back={patient.insuranceCardBack}
+        onFrontChange={(insuranceCardFront) => updateMut.mutate({ insuranceCardFront })}
+        onBackChange={(insuranceCardBack) => updateMut.mutate({ insuranceCardBack })}
+        onEdit={() => setEditingCard("medical")}
+        emptyHint="No plan details saved yet. Add the member ID, group number, and member services phone so they're searchable even if the photo is hard to read."
+        details={[
+          { label: "Carrier", value: patient.insuranceCarrier },
+          { label: "Plan Type", value: patient.insurancePlanType },
+          { label: "Member ID", value: patient.insuranceMemberId },
+          { label: "Group Number", value: patient.insuranceGroupNumber },
+          { label: "RxBIN", value: patient.insuranceRxBin },
+          { label: "RxPCN", value: patient.insuranceRxPcn },
+          { label: "RxGroup", value: patient.insuranceRxGroup },
+          { label: "Policy Holder", value: patient.insurancePolicyHolder },
+          {
+            label: "Effective Date",
+            value: patient.insuranceEffectiveDate && formatDob(patient.insuranceEffectiveDate),
+          },
+          {
+            label: "Member Services",
+            value: patient.insurancePhone && (
+              <a
+                href={telHref(patient.insurancePhone)}
+                className="underline underline-offset-2 break-words"
+                data-testid="link-insurance-phone"
+              >
+                {patient.insurancePhone}
+              </a>
+            ),
+          },
+        ]}
+      />
 
-          <div className="grid grid-cols-2 gap-3 min-w-0">
-            <CardPhotoTile
-              label="Front"
-              value={patient.insuranceCardFront}
-              onChange={(insuranceCardFront) => updateMut.mutate({ insuranceCardFront })}
-              onView={() => setViewing("front")}
-              testId="card-front"
-            />
-            <CardPhotoTile
-              label="Back"
-              value={patient.insuranceCardBack}
-              onChange={(insuranceCardBack) => updateMut.mutate({ insuranceCardBack })}
-              onView={() => setViewing("back")}
-              testId="card-back"
-            />
-          </div>
-
-          {hasInsuranceDetails ? (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-4 min-w-0">
-              <DetailRow label="Carrier" value={patient.insuranceCarrier} />
-              <DetailRow label="Plan Type" value={patient.insurancePlanType} />
-              <DetailRow label="Member ID" value={patient.insuranceMemberId} />
-              <DetailRow label="Group Number" value={patient.insuranceGroupNumber} />
-              <DetailRow label="RxBIN" value={patient.insuranceRxBin} />
-              <DetailRow label="RxPCN" value={patient.insuranceRxPcn} />
-              <DetailRow label="RxGroup" value={patient.insuranceRxGroup} />
-              <DetailRow label="Policy Holder" value={patient.insurancePolicyHolder} />
-              <DetailRow
-                label="Effective Date"
-                value={patient.insuranceEffectiveDate && formatDob(patient.insuranceEffectiveDate)}
-              />
-              <DetailRow
-                label="Member Services"
-                value={patient.insurancePhone && (
-                  <a
-                    href={`tel:${patient.insurancePhone.replace(/[^\d+]/g, "")}`}
-                    className="underline underline-offset-2 break-words"
-                    data-testid="link-insurance-phone"
-                  >
-                    {patient.insurancePhone}
-                  </a>
-                )}
-              />
-            </dl>
-          ) : (
-            <p className="text-sm text-muted-foreground border-t pt-4">
-              No plan details saved yet. Add the member ID, group number, and member services
-              phone so they're searchable even if the photo is hard to read.
-            </p>
-          )}
-
-          <Button
-            size="sm" variant="outline" className="gap-1.5"
-            onClick={() => setEditingInsurance(true)}
-            data-testid="button-edit-insurance"
-          >
-            <Edit2 className="w-3.5 h-3.5" /> {hasInsuranceDetails ? "Edit plan details" : "Add plan details"}
-          </Button>
-        </CardContent>
-      </Card>
+      <InsuranceCardSection
+        icon={Smile}
+        title="Dental Insurance Card"
+        description="Dental is usually a separate plan with its own card. Add it if you have one."
+        viewerNoun="Dental card"
+        tileTestIdPrefix="dental-card"
+        editTestId="button-edit-dental"
+        front={patient.dentalCardFront}
+        back={patient.dentalCardBack}
+        onFrontChange={(dentalCardFront) => updateMut.mutate({ dentalCardFront })}
+        onBackChange={(dentalCardBack) => updateMut.mutate({ dentalCardBack })}
+        onEdit={() => setEditingCard("dental")}
+        emptyHint="No dental plan saved yet. If your dental coverage is separate from your medical plan, add its card here."
+        details={[
+          { label: "Carrier", value: patient.dentalCarrier },
+          { label: "Plan Type", value: patient.dentalPlanType },
+          { label: "Member ID", value: patient.dentalMemberId },
+          { label: "Group Number", value: patient.dentalGroupNumber },
+          { label: "Policy Holder", value: patient.dentalPolicyHolder },
+          {
+            label: "Effective Date",
+            value: patient.dentalEffectiveDate && formatDob(patient.dentalEffectiveDate),
+          },
+          {
+            label: "Member Services",
+            value: patient.dentalPhone && (
+              <a
+                href={telHref(patient.dentalPhone)}
+                className="underline underline-offset-2 break-words"
+                data-testid="link-dental-phone"
+              >
+                {patient.dentalPhone}
+              </a>
+            ),
+          },
+        ]}
+      />
 
       <Dialog open={editingPersonal} onOpenChange={setEditingPersonal}>
         <DialogContent className={PROFILE_DIALOG_CLASS}>
@@ -808,25 +658,26 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editingInsurance} onOpenChange={setEditingInsurance}>
+      <Dialog open={editingCard !== null} onOpenChange={(open) => !open && setEditingCard(null)}>
         <DialogContent className={PROFILE_DIALOG_CLASS}>
-          <DialogShell title="Insurance Details" description="Type in what's printed on the card so you can search and read it easily.">
-            <InsuranceForm
-              patient={patient}
-              onSubmit={(data) => updateMut.mutate(data)}
-              onCancel={() => setEditingInsurance(false)}
-            />
-          </DialogShell>
+          {editingCard && (
+            <DialogShell
+              title={editingCard === "dental" ? "Dental Details" : "Insurance Details"}
+              description="Type in what's printed on the card so you can search and read it easily."
+            >
+              <CardDetailsForm
+                key={editingCard}
+                patient={patient}
+                sections={editingCard === "dental" ? DENTAL_FORM_SECTIONS : MEDICAL_FORM_SECTIONS}
+                idPrefix={editingCard === "dental" ? "dental" : "ins"}
+                saveLabel={editingCard === "dental" ? "Save Dental" : "Save Insurance"}
+                onSubmit={(data) => updateMut.mutate(data)}
+                onCancel={() => setEditingCard(null)}
+              />
+            </DialogShell>
+          )}
         </DialogContent>
       </Dialog>
-
-      {viewing && viewingSrc && (
-        <FullScreenImage
-          src={viewingSrc}
-          title={`Insurance card — ${viewing === "front" ? "front" : "back"}`}
-          onClose={() => setViewing(null)}
-        />
-      )}
     </div>
   );
 }
