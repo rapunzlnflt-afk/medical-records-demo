@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1012 638" width="1012" height="638" role="img" aria-label="Sample insurance card, front">
+  <defs>
+    <linearGradient id="f-band" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <clipPath id="f-card"><rect x="0" y="0" width="1012" height="638" rx="34"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#f-card)" font-family="Helvetica, Arial, sans-serif">
+    <rect width="1012" height="638" fill="#ffffff"/>
+    <circle cx="920" cy="560" r="230" fill="#f1f5f9"/>
+    <rect width="1012" height="150" fill="url(#f-band)"/>
+
+    <rect x="40" y="40" width="70" height="70" rx="18" fill="#ffffff" opacity="0.94"/>
+    <rect x="52" y="68" width="46" height="14" rx="7" fill="#1d4ed8"/>
+    <rect x="68" y="52" width="14" height="46" rx="7" fill="#1d4ed8"/>
+
+    <text x="130" y="72" font-size="38" font-weight="bold" fill="#ffffff" letter-spacing="1.5">NORTHWIND MUTUAL HEALTH</text>
+    <text x="130" y="108" font-size="22" fill="#e0f2fe">Sample Health Plan &#183; Member ID Card</text>
+
+    <text x="972" y="70" font-size="40" font-weight="bold" fill="#ffffff" letter-spacing="3" text-anchor="end">PPO</text>
+    <rect x="846" y="86" width="126" height="34" rx="17" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.65" stroke-width="2"/>
+    <text x="909" y="110" font-size="19" font-weight="bold" fill="#ffffff" letter-spacing="3" text-anchor="middle">SAMPLE</text>
+
+    <g font-size="20" font-weight="bold" fill="#64748b" letter-spacing="2">
+      <text x="48" y="210">MEMBER</text>
+      <text x="560" y="210">MEMBER ID</text>
+      <text x="48" y="318">GROUP NUMBER</text>
+      <text x="560" y="318">PLAN TYPE</text>
+      <text x="48" y="426">EFFECTIVE DATE</text>
+      <text x="560" y="426">COVERAGE</text>
+    </g>
+    <g font-size="36" font-weight="bold" fill="#0f172a">
+      <text x="48" y="252">JAMIE RIVERA</text>
+      <text x="560" y="252">SMPL-0123-4567</text>
+      <text x="48" y="360">SAMPLE-0001</text>
+      <text x="560" y="360">PPO Family</text>
+      <text x="48" y="468">01 / 01 / 2026</text>
+      <text x="560" y="468">Medical + Rx</text>
+    </g>
+
+    <rect x="40" y="498" width="932" height="76" rx="16" fill="#eff6ff" stroke="#bfdbfe" stroke-width="2"/>
+    <g font-size="18" font-weight="bold" fill="#1e40af" letter-spacing="1.5">
+      <text x="72" y="528">RxBIN</text>
+      <text x="392" y="528">RxPCN</text>
+      <text x="700" y="528">RxGRP</text>
+    </g>
+    <g font-size="28" font-weight="bold" fill="#0f172a">
+      <text x="72" y="558">009999</text>
+      <text x="392" y="558">SMPLPCN</text>
+      <text x="700" y="558">NWSMP01</text>
+    </g>
+
+    <text x="506" y="608" font-size="18" fill="#94a3b8" text-anchor="middle">Sample card for app demonstration only &#8212; not a real insurance plan.</text>
+  </g>
+
+  <rect x="1" y="1" width="1010" height="636" rx="34" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+</svg>

@@ -3,6 +3,7 @@ import type {
   Patient, Physician, Appointment, Medication, MedicationLog,
   MedicalRecord, Vital, EmergencyContact, Pharmacy,
 } from "@shared/schema";
+import { SAMPLE_CARD_BACK, SAMPLE_CARD_FRONT } from "./demo-cards";
 
 class MedicalRecordsDB extends Dexie {
   patients!: Table<Patient, number>;
@@ -33,12 +34,54 @@ class MedicalRecordsDB extends Dexie {
 
 export const db = new MedicalRecordsDB();
 
-/** Seed a default patient if the DB is empty */
-export async function ensureDefaultPatient(): Promise<void> {
+/**
+ * Seed the demo patient if the DB is empty. main.tsx drops the whole database on
+ * every page load, so this runs on each refresh and the demo always starts from
+ * the same fictional sample data.
+ */
+export async function ensureDemoData(): Promise<void> {
   const count = await db.patients.count();
-  if (count === 0) {
-    await db.patients.add({ name: "My Records", relationship: "Self", dateOfBirth: null, color: "#3b82f6" });
-  }
+  if (count > 0) return;
+
+  const patientId = await db.patients.add({
+    name: "Jamie Rivera",
+    relationship: "Self",
+    dateOfBirth: "1985-04-12",
+    color: "#3b82f6",
+    bloodType: "O+",
+    height: `5'7"`,
+    allergies: "Penicillin (hives), shellfish",
+    conditions: "Seasonal asthma — rescue inhaler as needed",
+    insuranceCardFront: SAMPLE_CARD_FRONT,
+    insuranceCardBack: SAMPLE_CARD_BACK,
+    insuranceCarrier: "Northwind Mutual Health",
+    insurancePlanType: "PPO Family",
+    insuranceMemberId: "SMPL-0123-4567",
+    insuranceGroupNumber: "SAMPLE-0001",
+    insuranceRxBin: "009999",
+    insuranceRxPcn: "SMPLPCN",
+    insuranceRxGroup: "NWSMP01",
+    insurancePhone: "(555) 018-2400",
+    insurancePolicyHolder: "Jamie Rivera",
+    insuranceEffectiveDate: "2026-01-01",
+  });
+
+  const physicianId = await db.physicians.add({
+    patientId,
+    name: "Dr. Elena Ramirez",
+    specialty: "Family Medicine",
+    phone: "(555) 018-3100",
+    fax: null,
+    email: null,
+    address: "820 Cedar Park Way",
+    city: "Springfield",
+    state: "ST",
+    zip: "00000",
+    npi: null,
+    notes: null,
+  });
+
+  await db.patients.update(patientId, { primaryPhysicianId: physicianId });
 }
 
 // ==================== CRUD helpers ====================
