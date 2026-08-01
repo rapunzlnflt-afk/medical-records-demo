@@ -23,10 +23,13 @@ import {
 import { Link } from "wouter";
 import { differenceInYears, format, parseISO } from "date-fns";
 import type { Patient, Physician } from "@shared/schema";
-import { formatPhone } from "@/lib/format-phone";
 import { formatPersonName } from "@/lib/format-name";
+import { blankToNull } from "@/lib/utils";
 import { fileToStorableDataUrl, IMAGE_READ_ERROR, IMAGE_UPLOAD_ACCEPT } from "@/lib/image";
-import { DetailRow, InsuranceCardSection } from "@/components/insurance-card-section";
+import {
+  cardFieldValues, DetailRow, InsuranceCardSection,
+  type CardFormSection,
+} from "@/components/insurance-card-section";
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"];
 
@@ -37,12 +40,6 @@ const PROFILE_DIALOG_CLASS =
   "p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
   "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[min(640px,calc(100vw-2rem))] sm:max-w-[640px] sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:border " +
   "overflow-hidden flex flex-col";
-
-/** Empty strings from form inputs are stored as null so absent fields stay absent. */
-function blankToNull(value: string): string | null {
-  const trimmed = value.trim();
-  return trimmed === "" ? null : trimmed;
-}
 
 function ageFromDob(dob: string | null | undefined): number | null {
   if (!dob) return null;
@@ -331,27 +328,7 @@ function PersonalDetailsForm({ patient, physicians, onSubmit, onCancel }: {
   );
 }
 
-type CardField = {
-  /** Suffix for the input id and testid: "carrier" with prefix "ins" -> input-ins-carrier. */
-  name: string;
-  key: keyof Patient;
-  label: string;
-  placeholder?: string;
-  date?: boolean;
-  /** Serial-number-ish field: don't let the keyboard autocapitalise or autocorrect it. */
-  code?: boolean;
-  phone?: boolean;
-  personName?: boolean;
-};
-
-type CardFormSection = {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-  fields: CardField[];
-};
-
-const MEDICAL_FORM_SECTIONS: CardFormSection[] = [
+const MEDICAL_FORM_SECTIONS: CardFormSection<keyof Patient & string>[] = [
   {
     icon: IdCard,
     title: "Plan",
@@ -379,7 +356,7 @@ const MEDICAL_FORM_SECTIONS: CardFormSection[] = [
 ];
 
 // No RxBIN/RxPCN/RxGRP: those are pharmacy fields and are never on a dental card.
-const DENTAL_FORM_SECTIONS: CardFormSection[] = [
+const DENTAL_FORM_SECTIONS: CardFormSection<keyof Patient & string>[] = [
   {
     icon: Smile,
     title: "Plan",
@@ -403,75 +380,11 @@ const DENTAL_FORM_SECTIONS: CardFormSection[] = [
   },
 ];
 
-function CardDetailsForm({ patient, sections, idPrefix, saveLabel, onSubmit, onCancel }: {
-  patient: Patient;
-  sections: CardFormSection[];
-  idPrefix: string;
-  saveLabel: string;
-  onSubmit: (data: Partial<Patient>) => void;
-  onCancel: () => void;
-}) {
-  const fields = sections.flatMap((s) => s.fields);
-  const [form, setForm] = useState<Record<string, string>>(() =>
-    Object.fromEntries(fields.map((f) => [f.name, (patient[f.key] as string | null | undefined) || ""])),
-  );
-
-  const handleSave = () => {
-    const data: Record<string, string | null> = {};
-    for (const f of fields) {
-      const raw = form[f.name];
-      data[f.key] = f.personName && raw.trim() ? formatPersonName(raw.trim()) : blankToNull(raw);
-    }
-    onSubmit(data as Partial<Patient>);
-  };
-
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5 bg-muted/20">
-        {sections.map((section) => (
-          <FieldSection
-            key={section.title}
-            icon={section.icon}
-            title={section.title}
-            description={section.description}
-          >
-            {section.fields.map((f) => {
-              const id = `${idPrefix}-${f.name}`;
-              return (
-                <div key={f.name} className="space-y-2">
-                  <Label htmlFor={id} className={labelClass}>{f.label}</Label>
-                  <Input
-                    id={id}
-                    className={controlClass}
-                    type={f.date ? "date" : "text"}
-                    inputMode={f.phone ? "tel" : undefined}
-                    autoCapitalize={f.code ? "characters" : undefined}
-                    autoCorrect={f.code ? "off" : undefined}
-                    value={form[f.name]}
-                    onChange={(e) => setForm((prev) => ({
-                      ...prev,
-                      [f.name]: f.phone ? formatPhone(e.target.value) : e.target.value,
-                    }))}
-                    placeholder={f.placeholder}
-                    data-testid={`input-${id}`}
-                  />
-                </div>
-              );
-            })}
-          </FieldSection>
-        ))}
-      </div>
-      <FormFooter onCancel={onCancel} onSave={handleSave} saveLabel={saveLabel} />
-    </div>
-  );
-}
-
 export default function Profile() {
   const { activePatientId, activePatient, isLoading } = usePatient();
   const pid = activePatientId;
   const { toast } = useToast();
   const [editingPersonal, setEditingPersonal] = useState(false);
-  const [editingCard, setEditingCard] = useState<"medical" | "dental" | null>(null);
 
   const { data: physicians = [] } = useQuery<Physician[]>({
     queryKey: ["physicians", pid],
@@ -483,7 +396,6 @@ export default function Profile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["patients"] });
       setEditingPersonal(false);
-      setEditingCard(null);
     },
     onError: () => {
       toast({ title: "Error", description: "Could not save. Please try again.", variant: "destructive" });
@@ -571,14 +483,21 @@ export default function Profile() {
         title="Medical Insurance Card"
         description="Photograph both sides so you can show them at check-in, even offline."
         viewerNoun="Medical card"
+        photoNoun="your medical card"
         tileTestIdPrefix="card"
+        idPrefix="ins"
         editTestId="button-edit-insurance"
+        saveTestId="button-save-insurance"
+        cancelTestId="button-cancel-insurance"
         front={patient.insuranceCardFront}
         back={patient.insuranceCardBack}
-        onFrontChange={(insuranceCardFront) => updateMut.mutate({ insuranceCardFront })}
-        onBackChange={(insuranceCardBack) => updateMut.mutate({ insuranceCardBack })}
-        onEdit={() => setEditingCard("medical")}
-        emptyHint="No plan details saved yet. Add the member ID, group number, and member services phone so they're searchable even if the photo is hard to read."
+        frontKey="insuranceCardFront"
+        backKey="insuranceCardBack"
+        formSections={MEDICAL_FORM_SECTIONS}
+        fieldValues={cardFieldValues(patient, MEDICAL_FORM_SECTIONS)}
+        onSave={(data) => updateMut.mutate(data as Partial<Patient>)}
+        isSaving={updateMut.isPending}
+        emptyHint="No plan details saved yet. Press Edit to add the member ID, group number, and member services phone so they're searchable even if the photo is hard to read."
         details={[
           { label: "Carrier", value: patient.insuranceCarrier },
           { label: "Plan Type", value: patient.insurancePlanType },
@@ -612,14 +531,21 @@ export default function Profile() {
         title="Dental Insurance Card"
         description="Dental is usually a separate plan with its own card. Add it if you have one."
         viewerNoun="Dental card"
+        photoNoun="your dental card"
         tileTestIdPrefix="dental-card"
+        idPrefix="dental"
         editTestId="button-edit-dental"
+        saveTestId="button-save-dental"
+        cancelTestId="button-cancel-dental"
         front={patient.dentalCardFront}
         back={patient.dentalCardBack}
-        onFrontChange={(dentalCardFront) => updateMut.mutate({ dentalCardFront })}
-        onBackChange={(dentalCardBack) => updateMut.mutate({ dentalCardBack })}
-        onEdit={() => setEditingCard("dental")}
-        emptyHint="No dental plan saved yet. If your dental coverage is separate from your medical plan, add its card here."
+        frontKey="dentalCardFront"
+        backKey="dentalCardBack"
+        formSections={DENTAL_FORM_SECTIONS}
+        fieldValues={cardFieldValues(patient, DENTAL_FORM_SECTIONS)}
+        onSave={(data) => updateMut.mutate(data as Partial<Patient>)}
+        isSaving={updateMut.isPending}
+        emptyHint="No dental plan saved yet. If your dental coverage is separate from your medical plan, press Edit to add its card here."
         details={[
           { label: "Carrier", value: patient.dentalCarrier },
           { label: "Plan Type", value: patient.dentalPlanType },
@@ -658,26 +584,6 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editingCard !== null} onOpenChange={(open) => !open && setEditingCard(null)}>
-        <DialogContent className={PROFILE_DIALOG_CLASS}>
-          {editingCard && (
-            <DialogShell
-              title={editingCard === "dental" ? "Dental Details" : "Insurance Details"}
-              description="Type in what's printed on the card so you can search and read it easily."
-            >
-              <CardDetailsForm
-                key={editingCard}
-                patient={patient}
-                sections={editingCard === "dental" ? DENTAL_FORM_SECTIONS : MEDICAL_FORM_SECTIONS}
-                idPrefix={editingCard === "dental" ? "dental" : "ins"}
-                saveLabel={editingCard === "dental" ? "Save Dental" : "Save Insurance"}
-                onSubmit={(data) => updateMut.mutate(data)}
-                onCancel={() => setEditingCard(null)}
-              />
-            </DialogShell>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
