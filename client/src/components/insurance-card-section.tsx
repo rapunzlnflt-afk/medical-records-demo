@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Camera, Edit2, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { Camera, Edit2, ZoomIn, ZoomOut } from "lucide-react";
 import { fileToStorableDataUrl, IMAGE_READ_ERROR, IMAGE_UPLOAD_ACCEPT } from "@/lib/image";
 import { formatPersonName } from "@/lib/format-name";
 import { formatPhone } from "@/lib/format-phone";
@@ -214,23 +214,25 @@ function CardPhotoTile({ label, value, editing, onChange, onRequestRemove, onVie
       )}
 
       {editing && value && (
-        <div className="space-y-1.5">
+        <div className="flex h-[44px] w-full max-w-[142.8px] gap-2 min-w-0">
           <Button
-            type="button" size="sm" variant="outline" className="w-full h-9 gap-1.5"
+            type="button" size="sm" variant="ghost"
+            className="h-[44px] min-h-[44px] flex-1 min-w-0 border-0 bg-transparent px-1 text-sm text-[#283548] dark:text-[#c7d1db] shadow-none hover:translate-y-0 hover:bg-transparent hover:text-foreground hover:shadow-none active:bg-transparent active:shadow-none"
             onClick={() => inputRef.current?.click()}
             disabled={busy}
             aria-label={`Replace ${label}`}
             data-testid={`button-replace-${testId}`}
           >
-            <Camera className="w-3.5 h-3.5" /> {busy ? "Processing…" : "Replace"}
+            {busy ? "Processing…" : "Replace"}
           </Button>
           <Button
-            type="button" size="sm" variant="outline" className="w-full h-9 gap-1.5 text-destructive hover:text-destructive"
+            type="button" size="sm" variant="ghost"
+            className="h-[44px] min-h-[44px] flex-1 min-w-0 border-0 bg-transparent px-1 text-sm text-[#283548] dark:text-[#c7d1db] shadow-none hover:translate-y-0 hover:bg-transparent hover:text-destructive hover:shadow-none active:bg-transparent active:text-destructive active:shadow-none focus-visible:text-destructive"
             onClick={onRequestRemove}
             aria-label={`Remove ${label}`}
             data-testid={`button-remove-${testId}`}
           >
-            <Trash2 className="w-3.5 h-3.5" /> Remove
+            Remove
           </Button>
         </div>
       )}
