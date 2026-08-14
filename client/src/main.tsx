@@ -15,3 +15,5 @@ async function boot() {
   await ensureDemoData();
   createRoot(document.getElementById("root")!).render(<App />);
 }
+
+void boot();
