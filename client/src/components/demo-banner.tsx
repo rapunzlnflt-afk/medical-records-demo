@@ -10,7 +10,7 @@ export default function DemoBanner() {
         &#9733; DEMO VERSION &mdash; data resets on refresh &middot; phone reminders are a full-version feature
       </span>
       <a
-        href="https://www.etsy.com/listing/4487743018/medical-records-keeper-app"
+        href="https://cleartrackapps.com/go/medical-records/?src=demo"
         target="_blank"
         rel="noopener noreferrer"
         className="shrink-0 inline-flex min-h-11 items-center gap-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors px-3 py-1 text-xs font-semibold text-white whitespace-nowrap"
