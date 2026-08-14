@@ -14,13 +14,14 @@ import { useToast } from "@/hooks/use-toast";
 import { HeartPulse, Plus, Trash2, Activity, Thermometer, Droplets, Wind } from "lucide-react";
 import type { Vital } from "@shared/schema";
 import { format, parseISO } from "date-fns";
+import { localTodayKey } from "@/lib/history-actions";
 
 function VitalForm({ onSubmit, onCancel }: {
   onSubmit: (data: any) => void;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: localTodayKey(),
     weight: "",
     bloodPressureSystolic: "",
     bloodPressureDiastolic: "",

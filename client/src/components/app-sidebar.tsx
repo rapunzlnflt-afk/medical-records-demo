@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   LayoutDashboard, CalendarDays, Pill, Stethoscope, FileText,
   HeartPulse, Phone, Building2, IdCard, Sun, Moon, Download, Upload,
-  Plus, X, Check, ChevronDown, Pencil, Trash2,
+  Plus, X, Check, ChevronDown, Pencil, Trash2, NotebookPen, History,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link, useLocation } from "wouter";
@@ -18,6 +18,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTheme } from "@/lib/theme";
 import { queryClient } from "@/lib/queryClient";
+import { localTodayKey } from "@/lib/history-actions";
 import { usePatient } from "@/lib/patient-context";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
@@ -31,6 +32,8 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Profile", url: "/profile", icon: IdCard },
   { title: "Appointments", url: "/appointments", icon: CalendarDays },
+  { title: "Notes", url: "/notes", icon: NotebookPen },
+  { title: "Timeline", url: "/timeline", icon: History },
   { title: "Medications", url: "/medications", icon: Pill },
   { title: "Physicians", url: "/physicians", icon: Stethoscope },
   { title: "Medical Records", url: "/records", icon: FileText },
@@ -283,7 +286,7 @@ export function AppSidebar() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `medical-records-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `medical-records-backup-${localTodayKey()}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

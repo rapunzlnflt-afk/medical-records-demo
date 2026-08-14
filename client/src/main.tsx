@@ -3,11 +3,12 @@ import App from "./App";
 import { ensureDemoData } from "./lib/db";
 import "./index.css";
 
-// Demo mode: clear database on every page load so data resets on refresh
+// Demo mode: clear database on every page load so data resets on refresh.
+// The normal seed below includes the sample notes as well as the original data.
 const deleteRequest = indexedDB.deleteDatabase("MedicalRecordsKeeper");
-deleteRequest.onsuccess = () => boot();
-deleteRequest.onerror = () => boot();
-deleteRequest.onblocked = () => boot();
+deleteRequest.onsuccess = () => void boot();
+deleteRequest.onerror = () => void boot();
+deleteRequest.onblocked = () => void boot();
 
 async function boot() {
   if (!window.location.hash) {

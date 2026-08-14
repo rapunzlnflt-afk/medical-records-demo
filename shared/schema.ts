@@ -151,3 +151,24 @@ export interface Pharmacy {
   notes: string | null;
   isPrimary: number;
 }
+
+
+export interface Note {
+  id?: number;
+  patientId: number;
+  date: string;
+  text: string;
+  createdAt: string;
+  // Optional so rows from before note categories and doctor flags remain readable.
+  category?: string;
+  flaggedForDoctor?: boolean;
+  flaggedPhysicianId?: number | null;
+}
+
+export interface NoteUpdate {
+  id?: number;
+  noteId: number;
+  date: string;
+  text: string;
+  createdAt: string;
+}

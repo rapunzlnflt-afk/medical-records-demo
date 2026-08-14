@@ -1,3 +1,4 @@
+import { localTodayKey } from "@/lib/history-actions";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -145,7 +146,7 @@ export default function Appointments() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["appointments", pid] }); toast({ title: "Appointment deleted" }); },
   });
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localTodayKey();
   const filtered = appointments.filter((a) => {
     if (filter === "upcoming") return a.status === "upcoming" && a.date >= today;
     if (filter === "past") return a.status === "completed" || a.date < today;
