@@ -18,6 +18,7 @@ import { Pill, Plus, Trash2, Edit2, Clock, AlertCircle, CheckCircle2, Sunrise, S
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Medication, MedicationLog, Physician } from "@shared/schema";
 import { format, parseISO } from "date-fns";
+import { localTodayKey } from "@/lib/history-actions";
 import { useLocation } from "wouter";
 
 const MED_TYPES = ["prescription", "otc", "supplement", "vitamin"];
@@ -196,7 +197,7 @@ export default function Medications() {
 
   const active = medications.filter((m) => m.active === 1);
   const inactive = medications.filter((m) => m.active !== 1);
-  const today = new Date().toISOString().split("T")[0];
+  const today = localTodayKey();
 
   const logDose = (medId: number, taken: boolean) => {
     logMut.mutate({

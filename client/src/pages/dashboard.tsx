@@ -7,6 +7,7 @@ import type { Appointment, Medication, Physician, MedicalRecord, Vital, Emergenc
 import { usePatient } from "@/lib/patient-context";
 import { getAppointments, getMedications, getPhysicians, getMedicalRecords, getVitals, getEmergencyContacts } from "@/lib/db";
 import { format, parseISO, isAfter, isBefore, addDays } from "date-fns";
+import { localTodayKey } from "@/lib/history-actions";
 
 function StatCard({ title, value, icon: Icon, href, gradient }: {
   title: string; value: number; icon: any; href: string; gradient?: boolean;
@@ -40,7 +41,7 @@ export default function Dashboard() {
   const { data: vitals = [] } = useQuery<Vital[]>({ queryKey: ["vitals", pid], queryFn: () => getVitals(pid) });
   const { data: contacts = [] } = useQuery<EmergencyContact[]>({ queryKey: ["emergencyContacts", pid], queryFn: () => getEmergencyContacts(pid) });
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localTodayKey();
   const upcoming = appointments.filter(
     (a) => a.status === "upcoming" && a.date >= today
   ).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);

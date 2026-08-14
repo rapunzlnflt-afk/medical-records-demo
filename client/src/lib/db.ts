@@ -1,7 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type {
   Patient, Physician, Appointment, Medication, MedicationLog,
-  MedicalRecord, Vital, EmergencyContact, Pharmacy,
+  MedicalRecord, Vital, EmergencyContact, Pharmacy, Note, NoteUpdate,
 } from "@shared/schema";
 import {
   SAMPLE_DENTAL_CARD_BACK, SAMPLE_DENTAL_CARD_FRONT,
@@ -18,6 +18,8 @@ class MedicalRecordsDB extends Dexie {
   vitals!: Table<Vital, number>;
   emergencyContacts!: Table<EmergencyContact, number>;
   pharmacies!: Table<Pharmacy, number>;
+  notes!: Table<Note, number>;
+  noteUpdates!: Table<NoteUpdate, number>;
 
   constructor() {
     super("MedicalRecordsKeeper");
@@ -31,6 +33,22 @@ class MedicalRecordsDB extends Dexie {
       vitals: "++id, patientId",
       emergencyContacts: "++id, patientId",
       pharmacies: "++id, patientId",
+    });
+
+    // This migration only adds note stores. Existing stores and their indexes are
+    // declared exactly as version 1 so an upgrade never rewrites local rows.
+    this.version(2).stores({
+      patients: "++id",
+      physicians: "++id, patientId",
+      appointments: "++id, patientId",
+      medications: "++id, patientId",
+      medicationLogs: "++id, medicationId",
+      medicalRecords: "++id, patientId",
+      vitals: "++id, patientId",
+      emergencyContacts: "++id, patientId",
+      pharmacies: "++id, patientId",
+      notes: "++id, patientId, date, flaggedForDoctor",
+      noteUpdates: "++id, noteId, date",
     });
   }
 }
@@ -94,6 +112,41 @@ export async function ensureDemoData(): Promise<void> {
   });
 
   await db.patients.update(patientId, { primaryPhysicianId: physicianId });
+
+  await db.appointments.bulkAdd([
+    {
+      patientId, physicianId, title: "Annual wellness visit", date: "2026-08-20", time: "09:30",
+      location: "Cedar Park Family Clinic", type: "Checkup", status: "upcoming",
+      notes: "Routine annual visit.", reminderDate: "2026-08-19",
+    },
+    {
+      patientId, physicianId, title: "Spring medication review", date: "2026-05-14", time: "14:00",
+      location: "Cedar Park Family Clinic", type: "Follow-up", status: "completed",
+      notes: "Reviewed seasonal asthma plan.", reminderDate: null,
+    },
+  ]);
+
+  const hydrationNoteId = await db.notes.add({
+    patientId, date: "2026-08-06", category: "Symptom",
+    text: "Noticed a mild scratchy throat after spending time outdoors. Rest and warm tea helped.",
+    flaggedForDoctor: true, flaggedPhysicianId: physicianId, createdAt: "2026-08-06T19:15:00",
+  });
+  await db.noteUpdates.add({
+    noteId: hydrationNoteId, date: "2026-08-08",
+    text: "Feeling back to normal; no further symptoms after two days.", createdAt: "2026-08-08T18:30:00",
+  });
+  await db.notes.bulkAdd([
+    {
+      patientId, date: "2026-08-02", category: "Sleep",
+      text: "Slept lightly after a late cup of coffee. Returned to the usual schedule the next night.",
+      flaggedForDoctor: false, flaggedPhysicianId: null, createdAt: "2026-08-02T20:45:00",
+    },
+    {
+      patientId, date: "2026-07-28", category: "Appetite / diet",
+      text: "Packed lunches more often this week and felt more energized in the afternoon.",
+      flaggedForDoctor: false, flaggedPhysicianId: null, createdAt: "2026-07-28T12:10:00",
+    },
+  ]);
 }
 
 // ==================== CRUD helpers ====================
@@ -125,6 +178,10 @@ export async function deletePatient(id: number): Promise<void> {
   }
   await db.medications.where("patientId").equals(id).delete();
   await db.appointments.where("patientId").equals(id).delete();
+  const notes = await db.notes.where("patientId").equals(id).toArray();
+  const noteIds = notes.flatMap((note) => note.id === undefined ? [] : [note.id]);
+  if (noteIds.length > 0) await db.noteUpdates.where("noteId").anyOf(noteIds).delete();
+  await db.notes.where("patientId").equals(id).delete();
   await db.physicians.where("patientId").equals(id).delete();
   await db.patients.delete(id);
 }
@@ -166,6 +223,65 @@ export async function updateAppointment(id: number, data: Partial<Appointment>):
 }
 export async function deleteAppointment(id: number): Promise<void> {
   await db.appointments.delete(id);
+}
+
+export const NOTE_CATEGORIES = [
+  "Observation", "Symptom", "Injury", "Illness", "Medication reaction",
+  "Behavior / mood", "Appetite / diet", "Sleep", "Digestion", "Skin", "Other",
+] as const;
+export type NoteCategory = (typeof NOTE_CATEGORIES)[number];
+
+export function noteCategory(note: Pick<Note, "category">): NoteCategory {
+  return NOTE_CATEGORIES.includes(note.category as NoteCategory) ? note.category as NoteCategory : "Observation";
+}
+
+export function noteIsFlaggedForDoctor(note: Pick<Note, "flaggedForDoctor">): boolean {
+  return note.flaggedForDoctor === true;
+}
+
+export async function getNotes(patientId: number): Promise<Note[]> {
+  const list = await db.notes.where("patientId").equals(patientId).toArray();
+  return list.map((note) => ({ ...note, category: noteCategory(note), flaggedForDoctor: noteIsFlaggedForDoctor(note), flaggedPhysicianId: note.flaggedPhysicianId ?? null }))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createNote(data: Omit<Note, "id">): Promise<Note> {
+  const flaggedForDoctor = noteIsFlaggedForDoctor(data);
+  const note: Note = { ...data, category: noteCategory(data), flaggedForDoctor, flaggedPhysicianId: flaggedForDoctor && typeof data.flaggedPhysicianId === "number" ? data.flaggedPhysicianId : null };
+  const id = await db.notes.add(note);
+  return { ...note, id };
+}
+
+export async function updateNote(id: number, data: Partial<Note>): Promise<Note> {
+  await db.notes.update(id, data);
+  return (await db.notes.get(id))!;
+}
+
+export async function deleteNote(id: number): Promise<void> {
+  await db.transaction("rw", db.notes, db.noteUpdates, async () => {
+    await db.noteUpdates.where("noteId").equals(id).delete();
+    await db.notes.delete(id);
+  });
+}
+
+export async function getNoteUpdates(noteIds: number[]): Promise<NoteUpdate[]> {
+  if (noteIds.length === 0) return [];
+  return (await db.noteUpdates.where("noteId").anyOf(noteIds).toArray())
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function createNoteUpdate(data: Omit<NoteUpdate, "id">): Promise<NoteUpdate> {
+  const id = await db.noteUpdates.add(data as NoteUpdate);
+  return { ...data, id };
+}
+
+export async function updateNoteUpdate(id: number, data: Partial<NoteUpdate>): Promise<NoteUpdate> {
+  await db.noteUpdates.update(id, data);
+  return (await db.noteUpdates.get(id))!;
+}
+
+export async function deleteNoteUpdate(id: number): Promise<void> {
+  await db.noteUpdates.delete(id);
 }
 
 // --- Medications ---
@@ -276,7 +392,7 @@ export async function deletePharmacy(id: number): Promise<void> {
 // ==================== Backup ====================
 export async function exportAllData() {
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     patients: await db.patients.toArray(),
     physicians: await db.physicians.toArray(),
@@ -287,6 +403,8 @@ export async function exportAllData() {
     vitals: await db.vitals.toArray(),
     emergencyContacts: await db.emergencyContacts.toArray(),
     pharmacies: await db.pharmacies.toArray(),
+    notes: await db.notes.toArray(),
+    noteUpdates: await db.noteUpdates.toArray(),
   };
 }
 
@@ -395,6 +513,28 @@ export async function importAllData(data: any): Promise<void> {
       const { id, ...rest } = p;
       rest.patientId = patientIdMap[rest.patientId] || patientIdMap[1] || 1;
       await db.pharmacies.add(rest);
+    }
+  }
+
+  // Import notes before their follow-ups so reassigned IDs remain linked. Missing
+  // feature fields are intentionally left absent and read as safe defaults.
+  const noteIdMap: Record<number, number> = {};
+  if (data.notes?.length) {
+    for (const note of data.notes) {
+      const oldId = note.id;
+      const { id, ...rest } = note;
+      rest.patientId = patientIdMap[rest.patientId] || patientIdMap[1] || 1;
+      rest.flaggedPhysicianId = rest.flaggedPhysicianId && physicianIdMap[rest.flaggedPhysicianId]
+        ? physicianIdMap[rest.flaggedPhysicianId] : null;
+      const newId = await db.notes.add(rest);
+      if (typeof oldId === "number") noteIdMap[oldId] = newId;
+    }
+  }
+  if (data.noteUpdates?.length) {
+    for (const update of data.noteUpdates) {
+      const { id, ...rest } = update;
+      const remappedNoteId = noteIdMap[rest.noteId];
+      if (remappedNoteId) await db.noteUpdates.add({ ...rest, noteId: remappedNoteId });
     }
   }
 }

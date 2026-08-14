@@ -3,12 +3,9 @@ import App from "./App";
 import { ensureDemoData } from "./lib/db";
 import "./index.css";
 
-// Demo mode: clear database on every page load so data resets on refresh
-const deleteRequest = indexedDB.deleteDatabase("MedicalRecordsKeeper");
-deleteRequest.onsuccess = () => boot();
-deleteRequest.onerror = () => boot();
-deleteRequest.onblocked = () => boot();
-
+// The existing demo seed initializes a blank database with the sample profile.
+// Keep local entries through a normal reload so the demo can show the product's
+// persistence behavior; no network or service worker data is involved.
 async function boot() {
   if (!window.location.hash) {
     window.location.hash = "#/";

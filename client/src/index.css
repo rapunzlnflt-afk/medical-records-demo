@@ -255,3 +255,44 @@ button.gradient-primary[disabled] {
     margin: 0 !important;
   }
 }
+
+
+/* Timeline print layout (ported with the history actions). */
+.print-history-heading {
+  display: none;
+}
+
+@media print {
+  @page { margin: 0.55in; }
+
+  .print-history-heading {
+    display: block !important;
+    margin: 0 0 1.25rem !important;
+    color: #000 !important;
+  }
+
+  .print-history-heading h1 {
+    margin: 0 0 0.25rem !important;
+    font-size: 20px !important;
+    color: #000 !important;
+  }
+
+  .print-history-heading p {
+    margin: 0.1rem 0 !important;
+    font-size: 13px !important;
+    color: #000 !important;
+  }
+
+  .print-history-entry,
+  .print-history-entry * {
+    color: black !important;
+    background: white !important;
+    border-color: #777 !important;
+    box-shadow: none !important;
+  }
+
+  .print-history-entry {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
