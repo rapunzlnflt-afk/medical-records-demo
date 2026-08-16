@@ -10,9 +10,42 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Stethoscope, Plus, Trash2, Edit2, Phone, Mail, MapPin, FileText } from "lucide-react";
+import { Stethoscope, Plus, Trash2, Edit2, Phone, Mail, MapPin, FileText, Globe, Printer } from "lucide-react";
 import type { Physician } from "@shared/schema";
 import { formatPhone } from "@/lib/format-phone";
+
+const mapHref = (address?: string) =>
+  address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : "";
+/** Turn a typed-in domain into a real link. Blank stays blank so no empty row renders. */
+const webHref = (url?: string | null) => {
+  const u = String(url || "").trim();
+  if (!u) return "";
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`;
+};
+/** Show the domain without the scheme so long URLs stay readable on a phone. */
+const displayWebsite = (url?: string | null) =>
+  String(url || "").trim().replace(/^https?:\/\//i, "").replace(/\/$/, "");
+
+/**
+ * One contact line on a physician card: icon, value, and an optional grey hint.
+ * The hint flows inline right after the value so it never lands on its own
+ * left-aligned line when a long address or URL wraps.
+ */
+function ContactRow({ icon: Icon, hint, children }: {
+  icon: React.ComponentType<{ className?: string }>;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2 min-w-0 text-sm">
+      <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground mt-[3px]" />
+      <p className="min-w-0 break-words leading-snug">
+        {children}
+        {hint && <span className="ml-1.5 text-[11px] text-muted-foreground/70 whitespace-nowrap">{hint}</span>}
+      </p>
+    </div>
+  );
+}
 
 function PhysicianForm({ initial, onSubmit, onCancel }: {
   initial?: Partial<Physician>;
@@ -25,6 +58,7 @@ function PhysicianForm({ initial, onSubmit, onCancel }: {
     phone: initial?.phone || "",
     fax: initial?.fax || "",
     email: initial?.email || "",
+    website: initial?.website || "",
     address: initial?.address || "",
     city: initial?.city || "",
     state: initial?.state || "",
@@ -56,6 +90,10 @@ function PhysicianForm({ initial, onSubmit, onCancel }: {
           <div className="sm:col-span-2">
             <Label className="text-xs font-body">Email</Label>
             <Input type="email" value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="doctor@clinic.com" data-testid="input-doc-email" />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs font-body">Website</Label>
+            <Input type="url" inputMode="url" autoCapitalize="none" autoCorrect="off" value={form.website || ""} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="clinicname.com" data-testid="input-doc-website" />
           </div>
           <div className="sm:col-span-2">
             <Label className="text-xs font-body">Address</Label>
@@ -157,45 +195,28 @@ export default function Physicians() {
             </CardContent>
           </Card>
         ) : (
-          filtered.map((doc) => (
-            <Card key={doc.id} className="hover-elevate" data-testid={`physician-${doc.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-                    <Stethoscope className="w-6 h-6 text-white" />
+          filtered.map((doc) => {
+            const addressLine = [doc.address, doc.city, doc.state, doc.zip].filter(Boolean).join(", ");
+            const tel = doc.phone ? `tel:${doc.phone.replace(/[^\d+]/g, "")}` : "";
+            const site = webHref(doc.website);
+            return (
+            <Card key={doc.id} className="hover-elevate w-full min-w-0 max-w-full overflow-hidden" data-testid={`physician-${doc.id}`}>
+              <CardContent className="p-4 space-y-3 min-w-0">
+                {/* Header: avatar + name/specialty on the left, edit/delete pinned right. */}
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
+                    <Stethoscope className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-heading text-sm font-semibold">{doc.name}</h3>
-                    <p className="text-xs text-primary font-medium">{doc.specialty}</p>
-                    <div className="mt-2 space-y-1">
-                      {doc.phone && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Phone className="w-3 h-3 flex-shrink-0" />{doc.phone}
-                        </p>
-                      )}
-                      {doc.email && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Mail className="w-3 h-3 flex-shrink-0" />{doc.email}
-                        </p>
-                      )}
-                      {(doc.address || doc.city) && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <MapPin className="w-3 h-3 flex-shrink-0" />
-                          {[doc.address, doc.city, doc.state, doc.zip].filter(Boolean).join(", ")}
-                        </p>
-                      )}
-                      {doc.npi && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <FileText className="w-3 h-3 flex-shrink-0" />NPI: {doc.npi}
-                        </p>
-                      )}
-                    </div>
-                    {doc.notes && <p className="text-xs text-muted-foreground mt-2 italic line-clamp-2">{doc.notes}</p>}
+                    <h3 className="font-heading text-base font-bold text-primary leading-tight break-words">{doc.name}</h3>
+                    {doc.specialty && (
+                      <p className="text-sm text-muted-foreground font-semibold mt-0.5 break-words">{doc.specialty}</p>
+                    )}
                   </div>
-                  <div className="flex gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-0.5 flex-shrink-0 -mr-1.5 -mt-1">
                     <Dialog open={editing?.id === doc.id} onOpenChange={(o) => !o && setEditing(null)}>
                       <DialogTrigger asChild>
-                        <Button size="icon" variant="ghost" onClick={() => setEditing(doc)} data-testid={`button-edit-doc-${doc.id}`}>
+                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditing(doc)} aria-label={`Edit physician ${doc.name}`} data-testid={`button-edit-doc-${doc.id}`}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
                       </DialogTrigger>
@@ -204,14 +225,63 @@ export default function Physicians() {
                         <PhysicianForm initial={doc} onSubmit={(data) => updateMut.mutate({ id: doc.id!, data })} onCancel={() => setEditing(null)} />
                       </DialogContent>
                     </Dialog>
-                    <Button size="icon" variant="ghost" onClick={() => deleteMut.mutate(doc.id!)} data-testid={`button-delete-doc-${doc.id}`}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => deleteMut.mutate(doc.id!)} aria-label={`Delete physician ${doc.name}`} data-testid={`button-delete-doc-${doc.id}`}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
+
+                {/* Contact rows: icon + tappable value + a small inline hint. */}
+                {(doc.phone || doc.email || doc.website || addressLine || doc.fax || doc.npi) && (
+                  <div className="space-y-2.5 min-w-0 pt-1 border-t border-border/50">
+                    {doc.phone && (
+                      <ContactRow icon={Phone} hint={tel ? "tap to call" : undefined}>
+                        {tel ? (
+                          <a href={tel} className="font-semibold text-primary break-words" data-testid={`link-doc-phone-${doc.id}`}>{doc.phone}</a>
+                        ) : (
+                          <span className="text-muted-foreground break-words">{doc.phone}</span>
+                        )}
+                      </ContactRow>
+                    )}
+                    {doc.email && (
+                      <ContactRow icon={Mail} hint="tap to email">
+                        <a href={`mailto:${doc.email}`} className="text-primary break-all" data-testid={`link-doc-email-${doc.id}`}>{doc.email}</a>
+                      </ContactRow>
+                    )}
+                    {site && (
+                      <ContactRow icon={Globe} hint="opens website">
+                        <a href={site} target="_blank" rel="noopener noreferrer" className="text-primary break-all" data-testid={`link-doc-website-${doc.id}`}>
+                          {displayWebsite(doc.website)}
+                        </a>
+                      </ContactRow>
+                    )}
+                    {addressLine && (
+                      <ContactRow icon={MapPin} hint="open in maps">
+                        <a href={mapHref(addressLine)} target="_blank" rel="noopener noreferrer" className="text-primary break-words leading-snug" data-testid={`link-doc-map-${doc.id}`}>
+                          {addressLine}
+                        </a>
+                      </ContactRow>
+                    )}
+                    {doc.fax && (
+                      <ContactRow icon={Printer}>
+                        <span className="text-muted-foreground break-words">Fax {doc.fax}</span>
+                      </ContactRow>
+                    )}
+                    {doc.npi && (
+                      <ContactRow icon={FileText}>
+                        <span className="text-muted-foreground break-words">NPI {doc.npi}</span>
+                      </ContactRow>
+                    )}
+                  </div>
+                )}
+
+                {doc.notes && (
+                  <p className="text-sm text-muted-foreground italic break-words min-w-0 pt-1 border-t border-border/50">{doc.notes}</p>
+                )}
               </CardContent>
             </Card>
-          ))
+            );
+          })
         )}
       </div>
     </div>
