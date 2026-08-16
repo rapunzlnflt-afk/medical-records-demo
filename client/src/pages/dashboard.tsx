@@ -20,24 +20,32 @@ function possessive(name: string): string {
   return name.endsWith("s") || name.endsWith("S") ? `${name}'` : `${name}'s`;
 }
 
-function StatCard({ title, value, icon: Icon, href, gradient }: {
-  title: string; value: number; icon: any; href: string; gradient?: boolean;
+/** Small uppercase group heading, matching the full version. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="font-body text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+      {children}
+    </h2>
+  );
+}
+
+function StatCard({ title, value, icon: Icon, href }: {
+  title: string; value: number; icon: any; href: string;
 }) {
   return (
-    <Link href={href}>
-      <Card className={`hover-elevate cursor-pointer ${gradient ? "gradient-primary text-white border-none" : ""}`} data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
-        {/* Label on top, then the count and its icon together as one unit near the
-            bottom, matching the full version. */}
-        <CardContent className="min-h-[116px] sm:min-h-[124px] p-4 sm:p-5 flex flex-col justify-between gap-3">
-          <p className={`text-sm sm:text-[15px] font-body font-semibold leading-tight tracking-tight break-words ${gradient ? "text-white/90" : "text-muted-foreground"}`}>
+    <Link href={href} className="block h-full min-w-0">
+      {/* Every tile gets the same neutral treatment; the accent is spent once per
+          screen instead of on the tiles. Compact so the grid stays one short
+          block near the top on a phone. */}
+      <Card className="hover-elevate cursor-pointer h-full" data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+        <CardContent className="p-3 flex flex-col gap-2 min-w-0">
+          <p className="text-sm font-body font-semibold leading-tight tracking-tight text-muted-foreground truncate">
             {title}
           </p>
-          <div className="flex items-center gap-2.5">
-            <span className={`text-3xl sm:text-[2rem] font-heading font-bold leading-none tabular-nums min-w-[1.4ch] ${gradient ? "text-white" : ""}`}>
-              {value}
-            </span>
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${gradient ? "bg-white/20" : "gradient-primary"}`}>
-              <Icon className="w-[18px] h-[18px] text-white" />
+          <div className="flex items-end justify-between gap-2 mt-auto min-w-0">
+            <span className="text-2xl font-heading font-bold leading-none tabular-nums">{value}</span>
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Icon className="w-4 h-4 text-primary" />
             </div>
           </div>
         </CardContent>
@@ -86,11 +94,11 @@ export default function Dashboard() {
       </div>
 
       {physicians.length === 0 && appointments.length === 0 && medications.length === 0 && records.length === 0 && (
-        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
+        <Card>
           <CardContent className="p-5">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <h2 className="font-heading text-sm font-bold">Welcome to Medical Records Keeper</h2>
@@ -117,12 +125,17 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        <StatCard title="Appointments" value={appointments.filter(a => a.status === "upcoming").length} icon={CalendarDays} href="/appointments" gradient />
-        <StatCard title="Active Meds" value={activeMeds.length} icon={Pill} href="/medications" />
-        <StatCard title="Physicians" value={physicians.length} icon={Stethoscope} href="/physicians" />
-        <StatCard title="Records" value={records.length} icon={FileText} href="/records" />
-      </div>
+      {/* Four most-used counts. Vitals and Emergency Contacts live in the menu
+          only, matching the full version. */}
+      <section className="space-y-3 min-w-0">
+        <SectionLabel>Overview</SectionLabel>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 min-w-0">
+          <StatCard title="Appointments" value={appointments.filter(a => a.status === "upcoming").length} icon={CalendarDays} href="/appointments" />
+          <StatCard title="Active Meds" value={activeMeds.length} icon={Pill} href="/medications" />
+          <StatCard title="Physicians" value={physicians.length} icon={Stethoscope} href="/physicians" />
+          <StatCard title="Records" value={records.length} icon={FileText} href="/records" />
+        </div>
+      </section>
 
       <div className="grid md:grid-cols-2 gap-4 min-w-0">
         <Card className="min-w-0">
@@ -220,11 +233,6 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard title="Vitals Logged" value={vitals.length} icon={HeartPulse} href="/vitals" />
-        <StatCard title="Emergency Contacts" value={contacts.length} icon={Phone} href="/emergency" />
       </div>
 
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
