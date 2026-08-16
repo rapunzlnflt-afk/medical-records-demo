@@ -19,7 +19,7 @@ function StatCard({ title, value, icon: Icon, href, gradient }: {
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className={`text-xs font-body ${gradient ? "text-white/80" : "text-muted-foreground"}`}>{title}</p>
-              <p className={`text-2xl font-heading font-bold mt-1 ${gradient ? "text-white" : ""}`}>{value}</p>
+              <p className={`text-2xl font-heading font-bold mt-2.5 ${gradient ? "text-white" : ""}`}>{value}</p>
             </div>
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${gradient ? "bg-white/20" : "gradient-primary"}`}>
               <Icon className={`w-5 h-5 ${gradient ? "text-white" : "text-white"}`} />
