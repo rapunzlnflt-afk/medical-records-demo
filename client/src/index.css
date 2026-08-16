@@ -237,8 +237,40 @@
   * {
     @apply border-border;
   }
+  /* Root font-size scaling matches the full version: phones get a larger base
+     so every rem-based utility (text-sm, text-base, padding, gaps) grows
+     together, and desktop sits a notch above the 16px default. */
+  html {
+    font-size: 19px;
+  }
+  @media (min-width: 768px) {
+    html {
+      font-size: 17px;
+    }
+  }
   body {
     @apply bg-background text-foreground;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Tailwind's 12px text-xs is too small for body copy on a phone. */
+  .text-xs {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  /* On phones, push text-sm closer to text-base for readable default copy. */
+  .text-sm {
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+  @media (min-width: 768px) {
+    .text-sm {
+      font-size: 0.875rem;
+    }
+  }
+  .text-base {
+    line-height: 1.55;
   }
 }
 

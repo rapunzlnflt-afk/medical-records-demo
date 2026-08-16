@@ -9,20 +9,35 @@ import { getAppointments, getMedications, getPhysicians, getMedicalRecords, getV
 import { format, parseISO, isAfter, isBefore, addDays } from "date-fns";
 import { localTodayKey } from "@/lib/history-actions";
 
+/** First word of a saved name, so the dashboard greeting stays first-name only. */
+function firstNameOnly(fullName: string): string {
+  return String(fullName || "").trim().split(/\s+/)[0] || "";
+}
+
+/** "Jamie" -> "Jamie's"; "Charles" -> "Charles'" for names already ending in s. */
+function possessive(name: string): string {
+  if (!name) return "";
+  return name.endsWith("s") || name.endsWith("S") ? `${name}'` : `${name}'s`;
+}
+
 function StatCard({ title, value, icon: Icon, href, gradient }: {
   title: string; value: number; icon: any; href: string; gradient?: boolean;
 }) {
   return (
     <Link href={href}>
       <Card className={`hover-elevate cursor-pointer ${gradient ? "gradient-primary text-white border-none" : ""}`} data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className={`text-xs font-body ${gradient ? "text-white/80" : "text-muted-foreground"}`}>{title}</p>
-              <p className={`text-2xl font-heading font-bold mt-2.5 ${gradient ? "text-white" : ""}`}>{value}</p>
-            </div>
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${gradient ? "bg-white/20" : "gradient-primary"}`}>
-              <Icon className={`w-5 h-5 ${gradient ? "text-white" : "text-white"}`} />
+        {/* Label on top, then the count and its icon together as one unit near the
+            bottom, matching the full version. */}
+        <CardContent className="min-h-[116px] sm:min-h-[124px] p-4 sm:p-5 flex flex-col justify-between gap-3">
+          <p className={`text-sm sm:text-[15px] font-body font-semibold leading-tight tracking-tight break-words ${gradient ? "text-white/90" : "text-muted-foreground"}`}>
+            {title}
+          </p>
+          <div className="flex items-center gap-2.5">
+            <span className={`text-3xl sm:text-[2rem] font-heading font-bold leading-none tabular-nums min-w-[1.4ch] ${gradient ? "text-white" : ""}`}>
+              {value}
+            </span>
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${gradient ? "bg-white/20" : "gradient-primary"}`}>
+              <Icon className="w-[18px] h-[18px] text-white" />
             </div>
           </div>
         </CardContent>
@@ -60,11 +75,13 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl">
+    <div className="p-4 md:p-6 space-y-6 max-w-6xl w-full min-w-0 overflow-x-hidden">
       <div>
         <h1 className="font-heading text-xl font-bold">Dashboard</h1>
         <p className="text-sm text-muted-foreground font-body mt-1">
-          {activePatient ? `${activePatient.name.endsWith('s') ? activePatient.name + "'" : activePatient.name + "'s"} health overview` : "Your health overview at a glance"}
+          {activePatient && firstNameOnly(activePatient.name)
+            ? `${possessive(firstNameOnly(activePatient.name))} health overview`
+            : "Your health overview at a glance"}
         </p>
       </div>
 
@@ -107,10 +124,10 @@ export default function Dashboard() {
         <StatCard title="Records" value={records.length} icon={FileText} href="/records" />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
+      <div className="grid md:grid-cols-2 gap-4 min-w-0">
+        <Card className="min-w-0">
+          <CardHeader className="pb-3 min-w-0">
+            <CardTitle className="font-heading text-base font-semibold flex items-center gap-2 min-w-0">
               <Clock className="w-4 h-4 text-primary" />
               Upcoming Appointments
             </CardTitle>
@@ -129,23 +146,27 @@ export default function Dashboard() {
                 const doc = physicians.find((p) => p.id === apt.physicianId);
                 const isReminder = reminderIds.has(apt.id);
                 return (
-                  <div key={apt.id} className={`flex items-center gap-3 p-2 rounded-md ${isReminder ? "bg-primary/10 border border-primary/30" : "bg-secondary/50"}`} data-testid={`upcoming-apt-${apt.id}`}>
+                  <div key={apt.id} className={`flex items-center gap-3 p-2 rounded-md min-w-0 ${isReminder ? "bg-primary/10 border border-primary/30" : "bg-secondary/50"}`} data-testid={`upcoming-apt-${apt.id}`}>
                     <div className="w-10 h-10 rounded-md gradient-primary flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-xs font-heading font-bold">
                         {format(parseISO(apt.date), "dd")}
                       </span>
                     </div>
+                    {/* Title gets the full row width; the type badge sits with the
+                        meta line underneath so nothing has to truncate early. */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-semibold truncate">{apt.title}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm font-semibold leading-snug break-words">{apt.title}</p>
                         {isReminder && <Bell className="w-3 h-3 text-primary flex-shrink-0" />}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {format(parseISO(apt.date), "MMM d")} at {apt.time}
-                        {doc ? ` · ${doc.name}` : ""}
-                      </p>
+                      <div className="flex items-center gap-2 min-w-0 mt-0.5">
+                        <p className="text-xs text-muted-foreground truncate">
+                          {format(parseISO(apt.date), "MMM d")} at {apt.time}
+                          {doc ? ` · ${doc.name}` : ""}
+                        </p>
+                        <Badge variant="secondary" className="text-xs flex-shrink-0">{apt.type}</Badge>
+                      </div>
                     </div>
-                    <Badge variant="secondary" className="text-xs flex-shrink-0">{apt.type}</Badge>
                   </div>
                 );
               })
