@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { addDays, format } from "date-fns";
 import type {
   Patient, Physician, Appointment, Medication, MedicationLog,
   MedicalRecord, Vital, EmergencyContact, Pharmacy, Note, NoteUpdate,
@@ -116,9 +117,10 @@ export async function ensureDemoData(): Promise<void> {
 
   await db.appointments.bulkAdd([
     {
-      patientId, physicianId, title: "Annual wellness visit", date: "2026-08-20", time: "09:30",
+      // Three weeks from the visitor's first visit, so the demo always has an upcoming visit.
+      patientId, physicianId, title: "Annual wellness visit", date: format(addDays(new Date(), 21), "yyyy-MM-dd"), time: "09:30",
       location: "Cedar Park Family Clinic", type: "Checkup", status: "upcoming",
-      notes: "Routine annual visit.", reminderDate: "2026-08-19",
+      notes: "Routine annual visit.", reminderDate: format(addDays(new Date(), 20), "yyyy-MM-dd"),
     },
     {
       patientId, physicianId, title: "Spring medication review", date: "2026-05-14", time: "14:00",
