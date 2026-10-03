@@ -5,6 +5,7 @@ import { CalendarDays, Pill, Stethoscope, FileText, HeartPulse, Phone, Clock, Al
 import { Link } from "wouter";
 import type { Appointment, Medication, Physician, MedicalRecord, Vital, EmergencyContact } from "@shared/schema";
 import { usePatient } from "@/lib/patient-context";
+import { appointmentState } from "@/lib/appointment-status";
 import { getAppointments, getMedications, getPhysicians, getMedicalRecords, getVitals, getEmergencyContacts } from "@/lib/db";
 import { format, parseISO, isAfter, isBefore, addDays } from "date-fns";
 import { localTodayKey } from "@/lib/history-actions";
@@ -130,7 +131,7 @@ export default function Dashboard() {
       <section className="space-y-3 min-w-0">
         <SectionLabel>Overview</SectionLabel>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 min-w-0">
-          <StatCard title="Appointments" value={appointments.filter(a => a.status === "upcoming").length} icon={CalendarDays} href="/appointments" />
+          <StatCard title="Appointments" value={appointments.filter(a => appointmentState(a) === "upcoming").length} icon={CalendarDays} href="/appointments" />
           <StatCard title="Active Meds" value={activeMeds.length} icon={Pill} href="/medications" />
           <StatCard title="Physicians" value={physicians.length} icon={Stethoscope} href="/physicians" />
           <StatCard title="Records" value={records.length} icon={FileText} href="/records" />
