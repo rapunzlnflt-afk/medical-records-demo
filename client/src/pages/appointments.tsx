@@ -1,5 +1,7 @@
 import { localTodayKey } from "@/lib/history-actions";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRoute } from "wouter";
+import { AppointmentRecords, flashCard } from "@/components/appointment-records";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment, getPhysicians } from "@/lib/db";
@@ -145,6 +147,15 @@ export default function Appointments() {
     mutationFn: (id: number) => deleteAppointment(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["appointments", pid] }); toast({ title: "Appointment deleted" }); },
   });
+
+  // /appointments/:aptId — arrived from a record's "From …" link.
+  const [, routeParams] = useRoute("/appointments/:aptId");
+  const targetAptId = routeParams?.aptId ? Number(routeParams.aptId) : null;
+  useEffect(() => {
+    if (targetAptId == null || isLoading) return;
+    setFilter("all");
+    flashCard(`appointment-${targetAptId}`);
+  }, [targetAptId, isLoading]);
 
   const today = localTodayKey();
   const filtered = appointments.filter((a) => {
@@ -295,6 +306,15 @@ export default function Appointments() {
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>
+                  </div>
+                  {/* Full card width so record titles stay readable on small phones. */}
+                  <div className="sm:pl-[3.75rem]">
+                    <AppointmentRecords
+                      apt={apt}
+                      patientId={pid}
+                      physicians={physicians}
+                      canAttach={apt.status === "completed" || apt.date < today}
+                    />
                   </div>
                 </CardContent>
               </Card>

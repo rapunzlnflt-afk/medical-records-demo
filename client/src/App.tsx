@@ -28,9 +28,11 @@ function AppRouter() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/profile" component={Profile} />
+      <Route path="/appointments/:aptId" component={Appointments} />
       <Route path="/appointments" component={Appointments} />
       <Route path="/medications" component={Medications} />
       <Route path="/physicians" component={Physicians} />
+      <Route path="/records/:recordId" component={MedicalRecords} />
       <Route path="/records" component={MedicalRecords} />
       <Route path="/vitals" component={Vitals} />
       <Route path="/emergency" component={EmergencyContacts} />

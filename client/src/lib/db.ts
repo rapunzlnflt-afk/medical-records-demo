@@ -126,6 +126,15 @@ export async function ensureDemoData(): Promise<void> {
       notes: "Reviewed seasonal asthma plan.", reminderDate: null,
     },
   ]);
+  // A sample record attached to the past visit, so the demo shows record chips.
+  const springVisit = await db.appointments.where("patientId").equals(patientId)
+    .filter((a) => a.title === "Spring medication review").first();
+  await db.medicalRecords.add({
+    patientId, title: "Asthma action plan", category: "condition", date: "2026-05-14",
+    physicianId, description: "Updated rescue inhaler plan for spring allergy season.",
+    notes: "From appointment on May 14, 2026", imageUrl: null,
+    appointmentId: springVisit?.id ?? null,
+  });
 
   const hydrationNoteId = await db.notes.add({
     patientId, date: "2026-08-06", category: "Symptom",
@@ -224,6 +233,8 @@ export async function updateAppointment(id: number, data: Partial<Appointment>):
 }
 export async function deleteAppointment(id: number): Promise<void> {
   await db.appointments.delete(id);
+  // Records attached to it stay; they just stop pointing at a visit that's gone.
+  await db.medicalRecords.filter((r) => r.appointmentId === id).modify({ appointmentId: null });
 }
 
 export const NOTE_CATEGORIES = [
@@ -444,14 +455,17 @@ export async function importAllData(data: any): Promise<void> {
   }
 
   // Import appointments
+  const appointmentIdMap: Record<number, number> = {};
   if (data.appointments?.length) {
     for (const a of data.appointments) {
+      const oldId = a.id;
       const { id, ...rest } = a;
       if (rest.physicianId && physicianIdMap[rest.physicianId]) {
         rest.physicianId = physicianIdMap[rest.physicianId];
       }
       rest.patientId = patientIdMap[rest.patientId] || patientIdMap[1] || 1;
-      await db.appointments.add(rest);
+      const newId = await db.appointments.add(rest);
+      if (oldId != null) appointmentIdMap[oldId] = newId;
     }
   }
 
@@ -486,6 +500,8 @@ export async function importAllData(data: any): Promise<void> {
         rest.physicianId = physicianIdMap[rest.physicianId];
       }
       rest.patientId = patientIdMap[rest.patientId] || patientIdMap[1] || 1;
+      // Appointments get new ids on restore, so carry the link across.
+      if (rest.appointmentId != null) rest.appointmentId = appointmentIdMap[rest.appointmentId] ?? null;
       await db.medicalRecords.add(rest);
     }
   }
