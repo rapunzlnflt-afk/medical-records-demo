@@ -2,6 +2,8 @@ import { localTodayKey } from "@/lib/history-actions";
 import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { AppointmentRecords, flashCard } from "@/components/appointment-records";
+import { Switch } from "@/components/ui/switch";
+import { appointmentState, APPOINTMENT_STATE_LABEL, APPOINTMENT_STATE_CLASS } from "@/lib/appointment-status";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment, getPhysicians } from "@/lib/db";
@@ -21,7 +23,6 @@ import type { Appointment, Physician } from "@shared/schema";
 import { format, parseISO, isAfter, isBefore } from "date-fns";
 
 const TYPES = ["checkup", "specialist", "lab", "imaging", "procedure", "other"];
-const STATUSES = ["upcoming", "completed", "cancelled"];
 
 function AppointmentForm({ physicians, initial, onSubmit, onCancel }: {
   physicians: Physician[];
@@ -85,15 +86,29 @@ function AppointmentForm({ physicians, initial, onSubmit, onCancel }: {
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label className="text-xs font-body">Status</Label>
-          <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-            <SelectTrigger data-testid="select-apt-status"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Upcoming vs. past comes from the date. Cancelled is the one status
+            the date can't tell, so it's the only one the user sets. */}
+        {initial?.id != null && (
+          <div>
+            <Label htmlFor="apt-cancelled" className="text-xs font-body">Cancelled</Label>
+            <label htmlFor="apt-cancelled" className="flex items-center gap-3 min-h-[2.5rem] cursor-pointer">
+              <Switch
+                id="apt-cancelled"
+                checked={form.status === "cancelled"}
+                onCheckedChange={(on) =>
+                  setForm({
+                    ...form,
+                    status: on
+                      ? "cancelled"
+                      : initial?.status && initial.status !== "cancelled" ? initial.status : "upcoming",
+                  })
+                }
+                data-testid="switch-apt-cancelled"
+              />
+              <span className="text-sm text-foreground/80">This appointment was cancelled</span>
+            </label>
+          </div>
+        )}
         <div className="sm:col-span-2">
           <Label className="text-xs font-body">Location</Label>
           <Input value={form.location || ""} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="123 Medical Pkwy" data-testid="input-apt-location" />
@@ -159,9 +174,9 @@ export default function Appointments() {
 
   const today = localTodayKey();
   const filtered = appointments.filter((a) => {
-    if (filter === "upcoming") return a.status === "upcoming" && a.date >= today;
-    if (filter === "past") return a.status === "completed" || a.date < today;
-    if (filter === "cancelled") return a.status === "cancelled";
+    if (filter === "upcoming") return appointmentState(a) === "upcoming";
+    if (filter === "past") return appointmentState(a) === "past";
+    if (filter === "cancelled") return appointmentState(a) === "cancelled";
     return true;
   });
 
@@ -275,10 +290,10 @@ export default function Appointments() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-heading text-sm font-semibold">{apt.title}</h3>
                         <Badge variant="secondary" className="text-xs">{apt.type}</Badge>
-                        <Badge className={`text-xs ${apt.status === "upcoming" ? "status-upcoming" : apt.status === "completed" ? "status-completed" : "status-cancelled"}`}>
-                          {apt.status === "completed" && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                          {apt.status === "cancelled" && <XCircle className="w-3 h-3 mr-1" />}
-                          {apt.status}
+                        <Badge className={`text-xs ${APPOINTMENT_STATE_CLASS[appointmentState(apt)]}`} data-testid={`apt-status-${apt.id}`}>
+                          {appointmentState(apt) === "past" && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                          {appointmentState(apt) === "cancelled" && <XCircle className="w-3 h-3 mr-1" />}
+                          {APPOINTMENT_STATE_LABEL[appointmentState(apt)]}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
