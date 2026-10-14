@@ -12,9 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { Pill, Plus, Trash2, Edit2, Clock, AlertCircle, CheckCircle2, Sunrise, Sun, Sunset, Moon, Printer, ExternalLink, Tag, ShieldAlert, ChevronDown } from "lucide-react";
+import { Pill, Plus, Trash2, Edit2, Clock, AlertCircle, CheckCircle2, Sunrise, Sun, Sunset, Moon, Printer, ExternalLink, Tag, ShieldAlert, ChevronDown, XCircle, MoreHorizontal, Archive } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Medication, MedicationLog, Physician } from "@shared/schema";
@@ -27,49 +27,43 @@ import { useLocation } from "wouter";
  * discount programs). Starts closed so the medication list stays the focus, and the
  * whole header is the tap target.
  */
-function LinkListCard({ title, icon: Icon, iconClass, description, links, testIdPrefix }: {
+function LinkListCard({ title, icon: Icon, description, links, testIdPrefix }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
-  iconClass: string;
   description: string;
   links: { name: string; url: string }[];
   testIdPrefix: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <Card className="h-fit">
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="w-full text-left px-4 py-3 flex items-center gap-3 min-h-[56px] hover-elevate rounded-lg"
-            data-testid={`button-toggle-${testIdPrefix}`}
-          >
-            <Icon className={`w-5 h-5 flex-shrink-0 ${iconClass}`} />
-            <span className="flex-1 min-w-0">
-              <span className="block font-heading text-base font-semibold leading-tight">{title}</span>
-              <span className="block text-xs text-muted-foreground mt-0.5 break-words">{description}</span>
-            </span>
-            <span className="flex items-center gap-1.5 flex-shrink-0 text-muted-foreground">
-              <Badge variant="secondary" className="text-[10px] font-medium">{links.length}</Badge>
-              <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
-            </span>
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent className="px-4 pb-3 pt-0 space-y-1">
-            {links.map((link) => (
-              <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer"
-                className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline font-body px-1.5 py-1.5 rounded-md hover:bg-primary/5 transition-colors"
-                data-testid={`link-${testIdPrefix}-${link.name.toLowerCase().replace(/\s+/g, "-")}`}>
-                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="min-w-0 break-words">{link.name}</span>
-              </a>
-            ))}
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex min-h-[56px] w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          data-testid={`button-toggle-${testIdPrefix}`}
+        >
+          <Icon className="h-5 w-5 flex-shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold leading-tight">{title}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+          </span>
+          <ChevronDown className={`h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="space-y-0.5 px-4 pb-3 pl-12">
+          {links.map((link) => (
+            <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer"
+              className="flex min-h-11 items-center gap-2 rounded-md px-1.5 py-1.5 font-body text-sm text-primary transition-colors hover:bg-primary/5 hover:underline"
+              data-testid={`link-${testIdPrefix}-${link.name.toLowerCase().replace(/\s+/g, "-")}`}>
+              <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="min-w-0 break-words">{link.name}</span>
+            </a>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -214,6 +208,7 @@ export default function Medications() {
   const pid = activePatientId;
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Medication | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [logOpen, setLogOpen] = useState<number | null>(null);
   const { toast } = useToast();
 
@@ -264,69 +259,79 @@ export default function Medications() {
     const medLogs = logs.filter((l) => l.medicationId === med.id);
     const todayLog = medLogs.find((l) => l.date === today);
 
+    const meta = [med.dosage, med.type].filter(Boolean).join(" · ");
+    const reference = [med.prescribedBy ? `Rx ${med.prescribedBy}` : null, med.pharmacy].filter(Boolean).join(" · ");
+
     return (
-      <Card className="hover-elevate" data-testid={`medication-${med.id}`}>
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-              <Pill className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-heading text-sm font-semibold">{med.name}</h3>
-                <Badge variant="secondary" className="text-xs">{med.type}</Badge>
-                {!med.active && <Badge variant="outline" className="text-xs">Inactive</Badge>}
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                <span>{med.dosage}</span>
-                <span className="flex items-center gap-1">{timeIcon(med.timeOfDay)}{med.frequency}</span>
-                {med.purpose && <span>{med.purpose}</span>}
-              </div>
-              {med.prescribedBy && <p className="text-xs text-muted-foreground mt-1">Rx: {med.prescribedBy}</p>}
-              {med.pharmacy && <p className="text-xs text-muted-foreground">Pharmacy: {med.pharmacy}</p>}
-              {med.refillDate && (
-                <p className="text-xs mt-1">
-                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />Refill: {format(parseISO(med.refillDate), "MMM d, yyyy")}
-                  </span>
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {med.active === 1 && (
-                <div className="flex gap-1">
-                  {todayLog ? (
-                    <Badge className="status-completed text-xs"><CheckCircle2 className="w-3 h-3 mr-1" />Taken</Badge>
-                  ) : (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => logDose(med.id!, true)} className="text-xs h-7" data-testid={`button-take-${med.id}`}>
-                        <CheckCircle2 className="w-3 h-3 mr-1" /> Take
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => logDose(med.id!, false)} className="text-xs h-7 text-muted-foreground" data-testid={`button-skip-${med.id}`}>
-                        Skip
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
-              <div className="flex gap-1 mt-1">
-                <Dialog open={editing?.id === med.id} onOpenChange={(o) => !o && setEditing(null)}>
-                  <DialogTrigger asChild>
-                    <Button size="icon" variant="ghost" onClick={() => setEditing(med)} data-testid={`button-edit-med-${med.id}`}>
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-lg">
-                    <DialogHeader><DialogTitle className="font-heading">Edit Medication</DialogTitle></DialogHeader>
-                    <MedicationForm physicians={physicians} initial={med} onSubmit={(data) => updateMut.mutate({ id: med.id!, data })} onCancel={() => setEditing(null)} />
-                  </DialogContent>
-                </Dialog>
-                <Button size="icon" variant="ghost" onClick={() => deleteMut.mutate(med.id!)} data-testid={`button-delete-med-${med.id}`}>
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </Button>
-              </div>
+      <Card data-testid={`medication-${med.id}`}>
+        <CardContent className="space-y-1 p-4">
+          {/* Name, then one ⋯ menu (Edit, Delete), as in the full app. */}
+          <div className="flex items-start gap-2">
+            <h3 className="min-w-0 flex-1 py-1 font-heading text-base font-semibold leading-tight [overflow-wrap:anywhere] sm:text-lg">
+              {med.name}
+            </h3>
+            <div className="-mr-2 -mt-1.5 flex shrink-0 items-center">
+              <Dialog open={editing?.id === med.id} onOpenChange={(o) => !o && setEditing(null)}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader><DialogTitle className="font-heading">Edit Medication</DialogTitle></DialogHeader>
+                  <MedicationForm physicians={physicians} initial={med} onSubmit={(data) => updateMut.mutate({ id: med.id!, data })} onCancel={() => setEditing(null)} />
+                </DialogContent>
+              </Dialog>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost" className="h-11 w-11 text-muted-foreground" aria-label={`More actions for ${med.name}`} data-testid={`button-med-menu-${med.id}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[10rem]">
+                  <DropdownMenuItem className="min-h-11 gap-2 text-base sm:text-sm" onSelect={() => setEditing(med)} data-testid={`button-edit-med-${med.id}`}>
+                    <Edit2 className="h-4 w-4" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="min-h-11 gap-2 text-base text-destructive focus:text-destructive sm:text-sm" onSelect={() => deleteMut.mutate(med.id!)} data-testid={`button-delete-med-${med.id}`}>
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
+
+          {/* One plain line of facts: dosage, form and how often. */}
+          <p className="text-sm text-muted-foreground">{[meta, med.frequency].filter(Boolean).join(" · ")}</p>
+
+          {(med.purpose || reference) && (
+            <p className="text-xs text-muted-foreground">{[med.purpose, reference].filter(Boolean).join(" · ")}</p>
+          )}
+
+          {med.refillDate && (
+            <p className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />Refill {format(parseISO(med.refillDate), "MMM d, yyyy")}
+            </p>
+          )}
+
+          {med.active === 1 && (
+            <div className="flex items-center gap-1 border-t border-border/50 pt-2">
+              {todayLog ? (
+                todayLog.taken ? (
+                  <Badge className="status-completed h-9 px-3 text-xs font-semibold" data-testid={`badge-taken-${med.id}`}>
+                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" />Taken
+                  </Badge>
+                ) : (
+                  <Badge className="status-skipped h-9 px-3 text-xs font-semibold" data-testid={`badge-skipped-${med.id}`}>
+                    <XCircle className="mr-1 h-3.5 w-3.5" />Skipped
+                  </Badge>
+                )
+              ) : (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => logDose(med.id!, true)} className="h-11 shrink-0 px-3 text-sm" data-testid={`button-take-${med.id}`}>
+                    Take
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => logDose(med.id!, false)} className="h-11 shrink-0 px-2.5 text-sm text-muted-foreground" data-testid={`button-skip-${med.id}`}>
+                    Skip
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -364,66 +369,41 @@ export default function Medications() {
         </div>
       </div>
 
-      {/* Today's Schedule */}
-      {active.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="font-heading text-base font-semibold flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
-              Today's Medications
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {active.map((med) => {
-                const todayLog = logs.find((l) => l.medicationId === med.id && l.date === today);
-                return (
-                  <div key={med.id} className={`p-2 rounded-md text-center text-xs ${todayLog ? "bg-green-50 dark:bg-green-950/20" : "bg-secondary/50"}`}>
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      {timeIcon(med.timeOfDay)}
-                      <span className="font-semibold truncate">{med.name}</span>
-                    </div>
-                    <span className="text-muted-foreground">{med.dosage}</span>
-                    {todayLog && <CheckCircle2 className="w-3 h-3 text-green-600 dark:text-green-400 mx-auto mt-1" />}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* One list, as in the full app: each card shows today's dose, and
+          archived medications sit in a collapsed row underneath. */}
+      <section className="space-y-3" aria-label="Your medications">
+        {isLoading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />)}</div>
+        ) : active.length === 0 ? (
+          <Card><CardContent className="py-12 text-center">
+            <Pill className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">No active medications</p>
+          </CardContent></Card>
+        ) : active.map((med) => <MedCard key={med.id} med={med} />)}
+        {inactive.length > 0 && (
+          <Collapsible open={showArchived} onOpenChange={setShowArchived}>
+            <CollapsibleTrigger asChild>
+              <button type="button" className="flex min-h-11 w-full items-center gap-2 rounded-md px-1 text-left text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="button-toggle-archived">
+                <Archive className="h-4 w-4" />
+                Archived ({inactive.length})
+                <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${showArchived ? "rotate-180" : ""}`} />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-1">
+              {inactive.map((med) => <MedCard key={med.id} med={med} />)}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </section>
 
-      <Tabs defaultValue="active">
-        <TabsList>
-          <TabsTrigger value="active" className="font-body text-xs">Active ({active.length})</TabsTrigger>
-          <TabsTrigger value="inactive" className="font-body text-xs">Inactive ({inactive.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="active" className="space-y-3 mt-3">
-          {isLoading ? (
-            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />)}</div>
-          ) : active.length === 0 ? (
-            <Card><CardContent className="py-12 text-center">
-              <Pill className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">No active medications</p>
-            </CardContent></Card>
-          ) : active.map((med) => <MedCard key={med.id} med={med} />)}
-        </TabsContent>
-        <TabsContent value="inactive" className="space-y-3 mt-3">
-          {inactive.length === 0 ? (
-            <Card><CardContent className="py-12 text-center">
-              <p className="text-sm text-muted-foreground">No inactive medications</p>
-            </CardContent></Card>
-          ) : inactive.map((med) => <MedCard key={med.id} med={med} />)}
-        </TabsContent>
-      </Tabs>
-
-      {/* Helpful Links — collapsed by default so the medication list stays the focus. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Extras in one quiet grouped list, all collapsed. */}
+      <section className="space-y-2" aria-labelledby="more-tools-heading">
+        <h2 id="more-tools-heading" className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">More tools</h2>
+        <Card className="divide-y divide-border/60 overflow-hidden">
         <LinkListCard
-          title="Drug Interaction Checkers"
+          title="Drug interaction checkers"
           icon={ShieldAlert}
-          iconClass="text-destructive"
-          description="Check if your medications interact with each other"
+          description="Check whether your medications interact"
           testIdPrefix="interaction"
           links={[
             { name: "Drugs.com Interaction Checker", url: "https://www.drugs.com/drug_interactions.html" },
@@ -433,10 +413,9 @@ export default function Medications() {
           ]}
         />
         <LinkListCard
-          title="Prescription Discounts"
+          title="Prescription discounts"
           icon={Tag}
-          iconClass="text-green-600 dark:text-green-400"
-          description="Save money on your prescriptions"
+          description="Ways to pay less for prescriptions"
           testIdPrefix="discount"
           links={[
             { name: "GoodRx", url: "https://www.goodrx.com" },
@@ -446,7 +425,8 @@ export default function Medications() {
             { name: "Medicare Extra Help", url: "https://www.ssa.gov/medicare/part-d-extra-help" },
           ]}
         />
-      </div>
+        </Card>
+      </section>
     </div>
   );
 }
