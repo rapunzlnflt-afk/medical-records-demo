@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { getPhysicians, createPhysician, updatePhysician, deletePhysician } from "@/lib/db";
@@ -8,14 +8,179 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Stethoscope, Plus, Trash2, Edit2, Phone, Mail, MapPin, FileText, Globe, Printer } from "lucide-react";
+import { Stethoscope, Plus, Trash2, Edit2, Phone, Mail, MapPin, FileText, Globe, Printer, Contact, Building2, IdCard } from "lucide-react";
 import type { Physician } from "@shared/schema";
 import { formatPhone } from "@/lib/format-phone";
+import { formatPersonName, formatTitleCase, formatStreetAddress, formatCity, formatState } from "@/lib/format-name";
 
-const mapHref = (address?: string) =>
-  address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : "";
+function normalizePhysicianFields<T extends Partial<Physician>>(data: T): T {
+  return {
+    ...data,
+    name: data.name ? formatPersonName(data.name) : data.name,
+    specialty: data.specialty ? formatTitleCase(data.specialty) : data.specialty,
+    website: data.website ? String(data.website).trim() : data.website,
+    address: data.address ? formatStreetAddress(data.address) : data.address,
+    city: data.city ? formatCity(data.city) : data.city,
+    state: data.state ? formatState(data.state) : data.state,
+  };
+}
+
+/* ---- Contact import helpers ---- */
+
+function hasContactPicker(): boolean {
+  return 'contacts' in navigator && 'ContactsManager' in window;
+}
+
+interface ContactData {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
+async function pickContact(): Promise<ContactData | null> {
+  try {
+    const nav = navigator as any;
+    const props = ['name', 'tel', 'email', 'address'];
+    const contacts = await nav.contacts.select(props, { multiple: false });
+    if (!contacts || contacts.length === 0) return null;
+    const c = contacts[0];
+    const name = c.name?.[0] || '';
+    const phone = c.tel?.[0] || '';
+    const email = c.email?.[0] || '';
+    // Address is an object with properties
+    const addr = c.address?.[0];
+    return {
+      name,
+      phone,
+      email,
+      address: addr?.streetAddress || addr?.addressLine?.[0] || '',
+      city: addr?.city || addr?.locality || '',
+      state: addr?.region || '',
+      zip: addr?.postalCode || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseVCard(text: string): ContactData[] {
+  const results: ContactData[] = [];
+  const cards = text.split('BEGIN:VCARD');
+  for (const card of cards) {
+    if (!card.includes('END:VCARD')) continue;
+    // Unfold continuation lines (RFC 2425)
+    const unfolded = card.replace(/\r?\n[ \t]/g, '');
+    const lines = unfolded.split(/\r?\n/);
+    let name = '', phone = '', email = '', address = '', city = '', state = '', zip = '';
+    for (const raw of lines) {
+      const line = raw.trim();
+      // FN (formatted name) — preferred
+      if (/^FN[;:]/.test(line)) {
+        name = line.replace(/^FN[^:]*:/, '').trim();
+      }
+      // N (structured name) — fallback if FN is empty
+      if (/^N[;:]/.test(line) && !name) {
+        const parts = line.replace(/^N[^:]*:/, '').split(';');
+        const last = parts[0]?.trim() || '';
+        const first = parts[1]?.trim() || '';
+        name = [first, last].filter(Boolean).join(' ');
+      }
+      // TEL
+      if (/^TEL[;:]/.test(line)) {
+        const val = line.replace(/^TEL[^:]*:/, '').trim();
+        if (!phone) phone = val;
+      }
+      // EMAIL
+      if (/^EMAIL[;:]/.test(line)) {
+        const val = line.replace(/^EMAIL[^:]*:/, '').trim();
+        if (!email) email = val;
+      }
+      // ADR — structured: PO Box;Extended;Street;City;State;Zip;Country
+      if (/^ADR[;:]/.test(line)) {
+        const val = line.replace(/^ADR[^:]*:/, '');
+        const parts = val.split(';');
+        if (!address) address = parts[2]?.trim() || '';
+        if (!city) city = parts[3]?.trim() || '';
+        if (!state) state = parts[4]?.trim() || '';
+        if (!zip) zip = parts[5]?.trim() || '';
+      }
+    }
+    if (name) {
+      results.push({ name, phone, email, address, city, state, zip });
+    }
+  }
+  return results;
+}
+
+function ContactImportButton({ onImport }: { onImport: (data: ContactData) => void }) {
+  const { toast } = useToast();
+  if (!hasContactPicker()) return null;
+
+  async function handleContactPicker() {
+    const data = await pickContact();
+    if (data) onImport(data);
+    else toast({ title: 'No contact selected', variant: 'destructive' });
+  }
+
+  return (
+    <Button size="sm" variant="outline" onClick={handleContactPicker}
+      className="gap-1 text-xs" data-testid="button-import-contact">
+      <Contact className="w-3.5 h-3.5" /> Import from Contacts
+    </Button>
+  );
+}
+
+/* ---- Physician form ---- */
+
+const physLabelClass = "text-base font-body font-semibold text-foreground";
+const physControlClass = "h-12 text-base";
+
+function PhysFieldSection({
+  icon: Icon, title, description, children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card shadow-sm">
+      <header className="flex items-start gap-3 px-4 sm:px-5 pt-4 pb-2">
+        <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
+          <Icon className="w-4 h-4 text-white" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="font-heading text-lg font-semibold leading-tight">{title}</h3>
+          {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+        </div>
+      </header>
+      <div className="px-4 sm:px-5 pb-5 pt-2 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+// Shared classes for the New/Edit Physician dialog so it behaves like a
+// near-full-screen sheet on mobile and a roomy centered dialog on desktop —
+// mirrors the appointment and medication modals.
+const PHYS_DIALOG_CLASS =
+  "p-0 sm:p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
+  "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[min(640px,calc(100vw-2rem))] sm:max-w-[640px] sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:border " +
+  "overflow-hidden flex flex-col";
+
+const phoneHref = (phone?: string) => {
+  if (!phone) return "";
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+};
+const mapHref = (address?: string) => {
+  if (!address) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+};
 /** Turn a typed-in domain into a real link. Blank stays blank so no empty row renders. */
 const webHref = (url?: string | null) => {
   const u = String(url || "").trim();
@@ -47,10 +212,11 @@ function ContactRow({ icon: Icon, hint, children }: {
   );
 }
 
-function PhysicianForm({ initial, onSubmit, onCancel }: {
+function PhysicianForm({ initial, onSubmit, onCancel, isEdit }: {
   initial?: Partial<Physician>;
   onSubmit: (data: any) => void;
   onCancel: () => void;
+  isEdit: boolean;
 }) {
   const [form, setForm] = useState({
     name: initial?.name || "",
@@ -67,65 +233,227 @@ function PhysicianForm({ initial, onSubmit, onCancel }: {
     notes: initial?.notes || "",
   });
 
+  function handleContactImport(data: ContactData) {
+    setForm(prev => ({
+      ...prev,
+      name: data.name || prev.name,
+      phone: data.phone ? formatPhone(data.phone) : prev.phone,
+      email: data.email || prev.email,
+      address: data.address || prev.address,
+      city: data.city || prev.city,
+      state: data.state || prev.state,
+      zip: data.zip || prev.zip,
+    }));
+  }
+
+  const canSubmit = Boolean(form.name && form.specialty);
+
   return (
-    <div className="flex flex-col max-h-[calc(85vh-5rem)] sm:max-h-none">
-      <div className="overflow-y-auto flex-1 space-y-4 pr-1">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs font-body">Name</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Dr. Jane Smith" data-testid="input-doc-name" />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5 bg-muted/20">
+        <ContactImportButton onImport={handleContactImport} />
+
+        <PhysFieldSection
+          icon={Stethoscope}
+          title="Physician Details"
+          description="Who they are and what they specialize in."
+        >
+          <div className="space-y-2">
+            <Label htmlFor="doc-name" className={physLabelClass}>Name</Label>
+            <Input
+              id="doc-name"
+              className={physControlClass}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onBlur={(e) => setForm((prev) => ({ ...prev, name: formatPersonName(e.target.value) }))}
+              placeholder="Dr. Jane Smith"
+              data-testid="input-doc-name"
+            />
           </div>
-          <div>
-            <Label className="text-xs font-body">Specialty</Label>
-            <Input value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} placeholder="Cardiology" data-testid="input-doc-specialty" />
+          <div className="space-y-2">
+            <Label htmlFor="doc-specialty" className={physLabelClass}>Specialty</Label>
+            <Input
+              id="doc-specialty"
+              className={physControlClass}
+              value={form.specialty}
+              onChange={(e) => setForm({ ...form, specialty: e.target.value })}
+              onBlur={(e) => setForm((prev) => ({ ...prev, specialty: formatTitleCase(e.target.value) }))}
+              placeholder="Cardiology"
+              data-testid="input-doc-specialty"
+            />
           </div>
-          <div>
-            <Label className="text-xs font-body">Phone</Label>
-            <Input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} placeholder="(555) 123-4567" data-testid="input-doc-phone" />
+        </PhysFieldSection>
+
+        <PhysFieldSection
+          icon={Phone}
+          title="Contact Information"
+          description="How to reach this provider."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="doc-phone" className={physLabelClass}>Phone</Label>
+              <Input
+                id="doc-phone"
+                className={physControlClass}
+                inputMode="tel"
+                value={form.phone || ""}
+                onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })}
+                placeholder="(555) 123-4567"
+                data-testid="input-doc-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="doc-fax" className={physLabelClass}>Fax</Label>
+              <Input
+                id="doc-fax"
+                className={physControlClass}
+                inputMode="tel"
+                value={form.fax || ""}
+                onChange={(e) => setForm({ ...form, fax: e.target.value })}
+                placeholder="(555) 123-4568"
+                data-testid="input-doc-fax"
+              />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs font-body">Fax</Label>
-            <Input value={form.fax || ""} onChange={(e) => setForm({ ...form, fax: e.target.value })} placeholder="(555) 123-4568" data-testid="input-doc-fax" />
+          <div className="space-y-2">
+            <Label htmlFor="doc-email" className={physLabelClass}>Email</Label>
+            <Input
+              id="doc-email"
+              type="email"
+              className={physControlClass}
+              autoCapitalize="none"
+              autoCorrect="off"
+              value={form.email || ""}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="doctor@clinic.com"
+              data-testid="input-doc-email"
+            />
           </div>
-          <div className="sm:col-span-2">
-            <Label className="text-xs font-body">Email</Label>
-            <Input type="email" value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="doctor@clinic.com" data-testid="input-doc-email" />
+          <div className="space-y-2">
+            <Label htmlFor="doc-website" className={physLabelClass}>Website</Label>
+            <Input
+              id="doc-website"
+              type="url"
+              inputMode="url"
+              className={physControlClass}
+              autoCapitalize="none"
+              autoCorrect="off"
+              value={form.website || ""}
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
+              placeholder="clinicname.com"
+              data-testid="input-doc-website"
+            />
           </div>
-          <div className="sm:col-span-2">
-            <Label className="text-xs font-body">Website</Label>
-            <Input type="url" inputMode="url" autoCapitalize="none" autoCorrect="off" value={form.website || ""} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="clinicname.com" data-testid="input-doc-website" />
+        </PhysFieldSection>
+
+        <PhysFieldSection
+          icon={Building2}
+          title="Office Address"
+          description="Used to auto-fill the location on new appointments."
+        >
+          <div className="space-y-2">
+            <Label htmlFor="doc-address" className={physLabelClass}>Street Address</Label>
+            <Input
+              id="doc-address"
+              className={physControlClass}
+              value={form.address || ""}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              onBlur={(e) => setForm((prev) => ({ ...prev, address: formatStreetAddress(e.target.value) }))}
+              placeholder="123 Medical Center Dr"
+              data-testid="input-doc-address"
+            />
           </div>
-          <div className="sm:col-span-2">
-            <Label className="text-xs font-body">Address</Label>
-            <Input value={form.address || ""} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="123 Medical Center Dr" data-testid="input-doc-address" />
+          <div className="space-y-2">
+            <Label htmlFor="doc-city" className={physLabelClass}>City</Label>
+            <Input
+              id="doc-city"
+              className={physControlClass}
+              value={form.city || ""}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+              onBlur={(e) => setForm((prev) => ({ ...prev, city: formatCity(e.target.value) }))}
+              placeholder="Fort Worth"
+              data-testid="input-doc-city"
+            />
           </div>
-          <div>
-            <Label className="text-xs font-body">City</Label>
-            <Input value={form.city || ""} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Fort Worth" data-testid="input-doc-city" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="doc-state" className={physLabelClass}>State</Label>
+              <Input
+                id="doc-state"
+                className={physControlClass}
+                value={form.state || ""}
+                onChange={(e) => setForm({ ...form, state: e.target.value })}
+                onBlur={(e) => setForm((prev) => ({ ...prev, state: formatState(e.target.value) }))}
+                placeholder="TX"
+                data-testid="input-doc-state"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="doc-zip" className={physLabelClass}>ZIP</Label>
+              <Input
+                id="doc-zip"
+                className={physControlClass}
+                inputMode="numeric"
+                value={form.zip || ""}
+                onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                placeholder="76109"
+                data-testid="input-doc-zip"
+              />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs font-body">State</Label>
-            <Input value={form.state || ""} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="TX" data-testid="input-doc-state" />
+        </PhysFieldSection>
+
+        <PhysFieldSection
+          icon={IdCard}
+          title="Additional Info"
+          description="Optional — useful for paperwork and personal notes."
+        >
+          <div className="space-y-2">
+            <Label htmlFor="doc-npi" className={physLabelClass}>NPI Number</Label>
+            <Input
+              id="doc-npi"
+              className={physControlClass}
+              inputMode="numeric"
+              value={form.npi || ""}
+              onChange={(e) => setForm({ ...form, npi: e.target.value })}
+              placeholder="1234567890"
+              data-testid="input-doc-npi"
+            />
           </div>
-          <div>
-            <Label className="text-xs font-body">ZIP</Label>
-            <Input value={form.zip || ""} onChange={(e) => setForm({ ...form, zip: e.target.value })} placeholder="76109" data-testid="input-doc-zip" />
+          <div className="space-y-2">
+            <Label htmlFor="doc-notes" className={physLabelClass}>Notes</Label>
+            <Textarea
+              id="doc-notes"
+              className="text-base min-h-[110px]"
+              value={form.notes || ""}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={4}
+              placeholder="Office hours, parking, billing notes..."
+              data-testid="input-doc-notes"
+            />
           </div>
-          <div>
-            <Label className="text-xs font-body">NPI Number</Label>
-            <Input value={form.npi || ""} onChange={(e) => setForm({ ...form, npi: e.target.value })} placeholder="1234567890" data-testid="input-doc-npi" />
-          </div>
-        </div>
-        <div>
-          <Label className="text-xs font-body">Notes</Label>
-          <Textarea value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} data-testid="input-doc-notes" />
-        </div>
+        </PhysFieldSection>
       </div>
-      <div className="flex gap-3 justify-end pt-4 pb-1 border-t mt-4 flex-shrink-0">
-        <Button variant="outline" onClick={onCancel} className="h-10 px-5 text-sm">Cancel</Button>
-        <Button onClick={() => onSubmit(form)} disabled={!form.name || !form.specialty}
-          className="gradient-primary text-white border border-primary/30 h-10 px-5 text-sm" data-testid="button-doc-save">
-          {initial?.id ? "Update" : "Add"} Physician
+
+      {/* Sticky action bar */}
+      <div
+        className="sticky bottom-0 left-0 right-0 border-t bg-card/95 backdrop-blur px-4 sm:px-6 py-3 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+      >
+        <Button
+          variant="outline"
+          onClick={onCancel}
+          className="h-12 text-base w-full sm:w-auto sm:min-w-[140px]"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={() => onSubmit(form)}
+          disabled={!canSubmit}
+          className="gradient-primary text-white border-none h-12 text-base font-semibold w-full sm:w-auto sm:min-w-[200px]"
+          data-testid="button-doc-save"
+        >
+          {isEdit ? "Update Physician" : "Add Physician"}
         </Button>
       </div>
     </div>
@@ -175,9 +503,12 @@ export default function Physicians() {
               <Plus className="w-4 h-4" /> Add Physician
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle className="font-heading">New Physician</DialogTitle></DialogHeader>
-            <PhysicianForm onSubmit={(data) => createMut.mutate(data)} onCancel={() => setOpen(false)} />
+          <DialogContent className={PHYS_DIALOG_CLASS}>
+            <DialogHeader className="gradient-primary text-white px-5 sm:px-6 pt-3 pb-3 sm:pt-4 sm:pb-4 text-left space-y-1 shrink-0">
+              <DialogTitle className="font-heading text-2xl font-bold text-white">New Physician</DialogTitle>
+              <DialogDescription className="text-white/85 text-sm">Add a healthcare provider. Name and specialty are required — the rest is optional.</DialogDescription>
+            </DialogHeader>
+            <PhysicianForm isEdit={false} onSubmit={(data) => createMut.mutate(data)} onCancel={() => setOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
@@ -220,9 +551,12 @@ export default function Physicians() {
                           <Edit2 className="w-4 h-4" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader><DialogTitle className="font-heading">Edit Physician</DialogTitle></DialogHeader>
-                        <PhysicianForm initial={doc} onSubmit={(data) => updateMut.mutate({ id: doc.id!, data })} onCancel={() => setEditing(null)} />
+                      <DialogContent className={PHYS_DIALOG_CLASS}>
+                        <DialogHeader className="gradient-primary text-white px-5 sm:px-6 pt-3 pb-3 sm:pt-4 sm:pb-4 text-left space-y-1 shrink-0">
+                          <DialogTitle className="font-heading text-2xl font-bold text-white">Edit Physician</DialogTitle>
+                          <DialogDescription className="text-white/85 text-sm">Update this provider's details. Changes save when you press Update.</DialogDescription>
+                        </DialogHeader>
+                        <PhysicianForm initial={doc} isEdit={true} onSubmit={(data) => updateMut.mutate({ id: doc.id!, data })} onCancel={() => setEditing(null)} />
                       </DialogContent>
                     </Dialog>
                     <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => deleteMut.mutate(doc.id!)} aria-label={`Delete physician ${doc.name}`} data-testid={`button-delete-doc-${doc.id}`}>

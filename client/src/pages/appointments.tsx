@@ -15,26 +15,131 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, Plus, Trash2, Edit2, MapPin, Clock, CheckCircle2, XCircle, Calendar, Stethoscope, Printer } from "lucide-react";
+import { CalendarDays, Plus, Trash2, Edit2, MapPin, Clock, CheckCircle2, XCircle, Calendar, Stethoscope, Printer, FileText, BellRing, BellOff, ClipboardList } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Appointment, Physician } from "@shared/schema";
 import { format, parseISO, isAfter, isBefore } from "date-fns";
 
 const TYPES = ["checkup", "specialist", "lab", "imaging", "procedure", "other"];
 
-function AppointmentForm({ physicians, initial, onSubmit, onCancel }: {
+// 15-minute interval time options (00:00 through 23:45) with 12-hour display labels.
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+  const opts: { value: string; label: string }[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      const period = h < 12 ? "AM" : "PM";
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      const label = `${h12}:${String(m).padStart(2, "0")} ${period}`;
+      opts.push({ value, label });
+    }
+  }
+  return opts;
+})();
+
+// Snap an arbitrary "HH:MM" string to the nearest 15-minute slot so existing
+// records load cleanly into the new selector.
+function snapTo15(time: string): string {
+  if (!time || !/^\d{1,2}:\d{2}/.test(time)) return "";
+  const [hStr, mStr] = time.split(":");
+  let h = Number(hStr);
+  let m = Math.round(Number(mStr) / 15) * 15;
+  if (m === 60) { m = 0; h = (h + 1) % 24; }
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// ---------------------------------------------------------------------------
+// Appointment alerts.
+//
+// An appointment only produces a phone reminder when `reminderDate` is set —
+// see `appointmentReminders()` in lib/reminder-sync.ts. Because the alert used
+// to be fully opt-in behind a collapsed control, an appointment could be saved
+// with no alert and never announce that fact. New appointments now default to
+// the day before at 9:00 AM, and cards say so out loud when no alert exists.
+// ---------------------------------------------------------------------------
+
+const DEFAULT_REMINDER_TIME = "09:00";
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * The calendar day before `date` ("YYYY-MM-DD"), computed with date-only local
+ * math so a DST boundary can never shift the result by a day.
+ */
+function dayBefore(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (Number.isNaN(dt.getTime())) return "";
+  dt.setDate(dt.getDate() - 1);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+/** An appointment produces a reminder only when it carries an alert date. */
+function hasAlert(a: Appointment): boolean {
+  return Boolean(a.reminderDate);
+}
+
+/** "2026-08-13" + "09:00" -> "Aug 13 at 9:00 AM". */
+function formatAlertLabel(date: string, time: string): string {
+  const effectiveTime = time || DEFAULT_REMINDER_TIME;
+  const parsed = parseISO(`${date}T${effectiveTime}:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return format(parsed, "MMM d 'at' h:mm a");
+}
+
+function alertHasPassed(date: string, time: string): boolean {
+  const parsed = new Date(`${date}T${time || DEFAULT_REMINDER_TIME}:00`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < Date.now();
+}
+
+const labelClass = "text-base font-body font-semibold text-foreground";
+const controlClass = "h-12 text-base";
+
+function FieldSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card shadow-sm">
+      <header className="flex items-start gap-3 px-4 sm:px-5 pt-4 pb-2">
+        <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
+          <Icon className="w-4 h-4 text-white" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="font-heading text-lg font-semibold leading-tight">{title}</h3>
+          {description && (
+            <p className="text-sm text-muted-foreground mt-1">{description}</p>
+          )}
+        </div>
+      </header>
+      <div className="px-4 sm:px-5 pb-5 pt-2 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function AppointmentForm({ physicians, initial, onSubmit, onCancel, isEdit }: {
   physicians: Physician[];
   initial?: Partial<Appointment>;
   onSubmit: (data: any) => void;
   onCancel: () => void;
+  isEdit: boolean;
 }) {
   const [form, setForm] = useState({
     title: initial?.title || "",
     physicianId: initial?.physicianId || null,
     date: initial?.date || "",
-    time: initial?.time || "",
+    time: snapTo15(initial?.time || ""),
     location: initial?.location || "",
     type: initial?.type || "checkup",
     status: initial?.status || "upcoming",
@@ -42,97 +147,280 @@ function AppointmentForm({ physicians, initial, onSubmit, onCancel }: {
     reminderDate: initial?.reminderDate || "",
   });
 
+  const [showReminderOptions, setShowReminderOptions] = useState(
+    Boolean(initial?.reminderDate)
+  );
+
+  // New appointments get a day-before 9:00 AM alert for free, derived from the
+  // appointment date as soon as one is picked. Once the user touches the alert
+  // fields themselves (including clearing them) we stop overwriting their
+  // choice. Editing an existing appointment never re-derives the alert.
+  const [reminderTouched, setReminderTouched] = useState(
+    isEdit || Boolean(initial?.reminderDate)
+  );
+
+  const handleDateChange = (date: string) => {
+    setForm((prev) => {
+      const next = { ...prev, date };
+      if (!isEdit && !reminderTouched) {
+        next.reminderDate = dayBefore(date);
+      }
+      return next;
+    });
+  };
+
+  const alertIsPast = Boolean(
+    form.reminderDate && alertHasPassed(form.reminderDate, "")
+  );
+
+  const canSubmit = Boolean(form.title && form.date && form.time);
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs font-body">Title</Label>
-          <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Annual checkup" data-testid="input-apt-title" />
-        </div>
-        <div>
-          <Label className="text-xs font-body">Physician</Label>
-          <Select value={form.physicianId?.toString() || "none"} onValueChange={(v) => {
-            const selectedId = v === "none" ? null : Number(v);
-            const doc = physicians.find((p) => p.id === selectedId);
-            const docAddress = doc ? [doc.address, doc.city, doc.state, doc.zip].filter(Boolean).join(", ") : "";
-            setForm(prev => ({
-              ...prev,
-              physicianId: selectedId,
-              // Auto-fill location from physician address if location is empty
-              location: prev.location || docAddress,
-            }));
-          }}>
-            <SelectTrigger data-testid="select-apt-physician"><SelectValue placeholder="Select physician" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              {physicians.map((p) => <SelectItem key={p.id} value={p.id!.toString()}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs font-body">Date</Label>
-          <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="input-apt-date" />
-        </div>
-        <div>
-          <Label className="text-xs font-body">Time</Label>
-          <Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} data-testid="input-apt-time" />
-        </div>
-        <div>
-          <Label className="text-xs font-body">Type</Label>
-          <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-            <SelectTrigger data-testid="select-apt-type"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {TYPES.map((t) => <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Upcoming vs. past comes from the date. Cancelled is the one status
-            the date can't tell, so it's the only one the user sets. */}
-        {initial?.id != null && (
-          <div>
-            <Label htmlFor="apt-cancelled" className="text-xs font-body">Cancelled</Label>
-            <label htmlFor="apt-cancelled" className="flex items-center gap-3 min-h-[2.5rem] cursor-pointer">
-              <Switch
-                id="apt-cancelled"
-                checked={form.status === "cancelled"}
-                onCheckedChange={(on) =>
-                  setForm({
-                    ...form,
-                    status: on
-                      ? "cancelled"
-                      : initial?.status && initial.status !== "cancelled" ? initial.status : "upcoming",
-                  })
-                }
-                data-testid="switch-apt-cancelled"
-              />
-              <span className="text-sm text-foreground/80">This appointment was cancelled</span>
-            </label>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Scrollable form body — sits between the sticky header and sticky footer */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5 bg-muted/20">
+        <FieldSection
+          icon={ClipboardList}
+          title="Appointment Details"
+          description="What is this visit about?"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="apt-title" className={labelClass}>Title</Label>
+            <Input
+              id="apt-title"
+              className={controlClass}
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="Annual checkup"
+              data-testid="input-apt-title"
+            />
           </div>
-        )}
-        <div className="sm:col-span-2">
-          <Label className="text-xs font-body">Location</Label>
-          <Input value={form.location || ""} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="123 Medical Pkwy" data-testid="input-apt-location" />
-        </div>
-        <div>
-          <Label className="text-xs font-body">Remind Me On</Label>
-          <Input type="date" value={form.reminderDate || ""} onChange={(e) => setForm({ ...form, reminderDate: e.target.value })} data-testid="input-apt-reminder" />
-          <p className="text-xs text-muted-foreground mt-1">Pick a date to see a reminder on the Dashboard</p>
-        </div>
+          <div className="space-y-2">
+            <Label className={labelClass}>Physician</Label>
+            <Select value={form.physicianId?.toString() || "none"} onValueChange={(v) => {
+              const selectedId = v === "none" ? null : Number(v);
+              const doc = physicians.find((p) => p.id === selectedId);
+              const docAddress = doc ? [doc.address, doc.city, doc.state, doc.zip].filter(Boolean).join(", ") : "";
+              setForm(prev => ({
+                ...prev,
+                physicianId: selectedId,
+                location: prev.location || docAddress,
+              }));
+            }}>
+              <SelectTrigger className={controlClass} data-testid="select-apt-physician">
+                <SelectValue placeholder="Select physician" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="none">None</SelectItem>
+                {physicians.map((p) => <SelectItem key={p.id} value={p.id!.toString()}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className={isEdit ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : ""}>
+            <div className="space-y-2">
+              <Label className={labelClass}>Type</Label>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger className={controlClass} data-testid="select-apt-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TYPES.map((t) => <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Upcoming vs. past comes from the date. Cancelled is the one status
+                the date can't tell, so it's the only one the user sets. */}
+            {isEdit && (
+              <div className="space-y-2">
+                <Label htmlFor="apt-cancelled" className={labelClass}>Cancelled</Label>
+                <label htmlFor="apt-cancelled" className="flex items-center gap-3 min-h-[2.75rem] cursor-pointer">
+                  <Switch
+                    id="apt-cancelled"
+                    checked={form.status === "cancelled"}
+                    onCheckedChange={(on) =>
+                      setForm({
+                        ...form,
+                        status: on
+                          ? "cancelled"
+                          : initial?.status && initial.status !== "cancelled" ? initial.status : "upcoming",
+                      })
+                    }
+                    data-testid="switch-apt-cancelled"
+                  />
+                  <span className="text-sm text-foreground/80">This appointment was cancelled</span>
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="apt-location" className={labelClass}>Location</Label>
+            <Input
+              id="apt-location"
+              className={controlClass}
+              value={form.location || ""}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              placeholder="123 Medical Pkwy"
+              data-testid="input-apt-location"
+            />
+          </div>
+        </FieldSection>
+
+        <FieldSection
+          icon={Calendar}
+          title="Schedule"
+          description="Date and time of the visit. Time is in 15-minute steps."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="apt-date" className={labelClass}>Date</Label>
+              <Input
+                id="apt-date"
+                type="date"
+                className={controlClass}
+                value={form.date}
+                onChange={(e) => handleDateChange(e.target.value)}
+                data-testid="input-apt-date"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className={labelClass}>Time</Label>
+              <Select value={form.time} onValueChange={(v) => setForm({ ...form, time: v })}>
+                <SelectTrigger className={controlClass} data-testid="select-apt-time">
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {TIME_OPTIONS.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </FieldSection>
+
+        <FieldSection
+          icon={BellRing}
+          title="Reminder"
+          description="Shows on your Dashboard. New appointments default to the day before at 9:00 AM. Phone alerts are in the full version."
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex-1 min-w-[160px] space-y-1">
+              {form.reminderDate ? (
+                <p className="text-sm font-semibold text-primary flex items-center gap-1.5">
+                  <BellRing className="w-4 h-4 flex-shrink-0" />
+                  <span>Alert {formatAlertLabel(form.reminderDate, "")}</span>
+                </p>
+              ) : (
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-500 flex items-center gap-1.5">
+                  <BellOff className="w-4 h-4 flex-shrink-0" />
+                  <span>No reminder set</span>
+                </p>
+              )}
+              {alertIsPast && (
+                <p className="text-sm text-amber-700 dark:text-amber-500">
+                  That alert time has already passed, so no reminder will be sent.
+                </p>
+              )}
+                          </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 px-4"
+              onClick={() => setShowReminderOptions((prev) => !prev)}
+            >
+              {showReminderOptions ? "Hide" : form.reminderDate ? "Edit alert" : "Set alert"}
+            </Button>
+          </div>
+
+          {showReminderOptions && (
+            <div className="grid gap-4 sm:grid-cols-2 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="apt-reminder-date" className={labelClass}>Alert Date</Label>
+                <Input
+                  id="apt-reminder-date"
+                  type="date"
+                  className={controlClass}
+                  value={form.reminderDate || ""}
+                  onChange={(e) => {
+                    setReminderTouched(true);
+                    setForm({ ...form, reminderDate: e.target.value });
+                  }}
+                  data-testid="input-apt-reminder"
+                />
+              </div>
+              {form.reminderDate && (
+                <div className="sm:col-span-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 -ml-2"
+                    onClick={() => {
+                      setReminderTouched(true);
+                      setForm({
+                        ...form,
+                        reminderDate: "",
+                      });
+                    }}
+                  >
+                    Clear alert
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </FieldSection>
+
+        <FieldSection
+          icon={FileText}
+          title="Notes"
+          description="Anything you want to remember about this visit."
+        >
+          <Textarea
+            className="text-base min-h-[110px]"
+            value={form.notes || ""}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Bring insurance card..."
+            rows={4}
+            data-testid="input-apt-notes"
+          />
+        </FieldSection>
       </div>
-      <div>
-        <Label className="text-xs font-body">Notes</Label>
-        <Textarea value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Bring insurance card..." rows={2} data-testid="input-apt-notes" />
-      </div>
-      <div className="flex gap-2 justify-end">
-        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button size="sm" onClick={() => onSubmit(form)} disabled={!form.title || !form.date || !form.time} className="gradient-primary text-white border-none" data-testid="button-apt-save">
-          {initial?.id ? "Update" : "Add"} Appointment
+
+      {/* Sticky action bar */}
+      <div
+        className="sticky bottom-0 left-0 right-0 border-t bg-card/95 backdrop-blur px-4 sm:px-6 py-3 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+      >
+        <Button
+          variant="outline"
+          onClick={onCancel}
+          className="h-12 text-base w-full sm:w-auto sm:min-w-[140px]"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={() => onSubmit(form)}
+          disabled={!canSubmit}
+          className="gradient-primary text-white border-none h-12 text-base font-semibold w-full sm:w-auto sm:min-w-[200px]"
+          data-testid="button-apt-save"
+        >
+          {isEdit ? "Update Appointment" : "Add Appointment"}
         </Button>
       </div>
     </div>
   );
 }
 
+// Tailwind classes shared by both the New and Edit dialogs to make the
+// appointment modal behave like a near-full-screen sheet on mobile and a
+// roomy centered dialog on desktop.
+const APT_DIALOG_CLASS =
+  "p-0 sm:p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
+  "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[min(640px,calc(100vw-2rem))] sm:max-w-[640px] sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:border " +
+  "overflow-hidden flex flex-col";
+
+// Considered "past" when its scheduled date+time has already gone by.
+// Uses end-of-day if no time is set so all-day items don't expire at midnight.
 export default function Appointments() {
   const { activePatientId } = usePatient();
   const pid = activePatientId;
@@ -213,9 +501,12 @@ export default function Appointments() {
                 <Plus className="w-4 h-4" /> Add Appointment
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle className="font-heading">New Appointment</DialogTitle></DialogHeader>
-            <AppointmentForm physicians={physicians} onSubmit={(data) => createMut.mutate(data)} onCancel={() => setOpen(false)} />
+          <DialogContent className={APT_DIALOG_CLASS}>
+            <DialogHeader className="gradient-primary text-white px-5 sm:px-6 pt-3 pb-3 sm:pt-4 sm:pb-4 text-left space-y-1 shrink-0">
+              <DialogTitle className="font-heading text-2xl font-bold text-white">New Appointment</DialogTitle>
+              <DialogDescription className="text-white/85 text-sm">Fill in the visit details. Title, date, and time are required.</DialogDescription>
+            </DialogHeader>
+            <AppointmentForm physicians={physicians} isEdit={false} onSubmit={(data) => createMut.mutate(data)} onCancel={() => setOpen(false)} />
           </DialogContent>
           </Dialog>
         </div>
@@ -310,9 +601,12 @@ export default function Appointments() {
                             <Edit2 className="w-4 h-4" />
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-lg">
-                          <DialogHeader><DialogTitle className="font-heading">Edit Appointment</DialogTitle></DialogHeader>
-                          <AppointmentForm physicians={physicians} initial={apt}
+                        <DialogContent className={APT_DIALOG_CLASS}>
+                          <DialogHeader className="gradient-primary text-white px-5 sm:px-6 pt-3 pb-3 sm:pt-4 sm:pb-4 text-left space-y-1 shrink-0">
+                            <DialogTitle className="font-heading text-2xl font-bold text-white">Edit Appointment</DialogTitle>
+                            <DialogDescription className="text-white/85 text-sm">Update the visit details. Changes save when you press Update.</DialogDescription>
+                          </DialogHeader>
+                          <AppointmentForm physicians={physicians} initial={apt} isEdit={true}
                             onSubmit={(data) => updateMut.mutate({ id: apt.id!, data })}
                             onCancel={() => setEditing(null)} />
                         </DialogContent>
