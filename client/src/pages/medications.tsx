@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CaregiverSharePreview } from "@/components/caregiver-share-preview";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { getMedications, createMedication, updateMedication, deleteMedication, getMedicationLogs, createMedicationLog, getPhysicians } from "@/lib/db";
@@ -400,6 +401,7 @@ export default function Medications() {
       <section className="space-y-2" aria-labelledby="more-tools-heading">
         <h2 id="more-tools-heading" className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">More tools</h2>
         <Card className="divide-y divide-border/60 overflow-hidden">
+        <CaregiverSharePreview />
         <LinkListCard
           title="Drug interaction checkers"
           icon={ShieldAlert}
