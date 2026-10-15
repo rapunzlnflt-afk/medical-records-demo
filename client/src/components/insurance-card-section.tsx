@@ -29,7 +29,7 @@ import { blankToNull } from "@/lib/utils";
 // Viewer sits above the demo's promo banners (z-index 9999) via the shared
 // DialogContent, which carries the z-modal token.
 const VIEWER_DIALOG_CLASS =
-  "p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
+  "p-0 sm:p-0 gap-0 max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none border-0 left-0 right-0 top-0 translate-x-0 translate-y-0 " +
   "sm:left-0 sm:right-0 sm:top-0 sm:w-screen sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-none sm:p-0 " +
   "overflow-hidden flex flex-col bg-black text-white";
 
