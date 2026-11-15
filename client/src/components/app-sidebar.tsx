@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   LayoutDashboard, CalendarDays, Pill, Stethoscope, FileText,
   HeartPulse, Phone, Building2, IdCard, Sun, Moon, Download, Upload,
-  Plus, X, Check, ChevronDown, Pencil, Trash2, NotebookPen, History,
+  Plus, X, Check, ChevronDown, Pencil, Trash2, NotebookPen, History, ClipboardList,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link, useLocation } from "wouter";
@@ -35,6 +35,7 @@ const navItems = [
   { title: "Notes", url: "/notes", icon: NotebookPen },
   { title: "Timeline", url: "/timeline", icon: History },
   { title: "Medications", url: "/medications", icon: Pill },
+  { title: "Care Log", url: "/care", icon: ClipboardList, care: true },
   { title: "Physicians", url: "/physicians", icon: Stethoscope },
   { title: "Medical Records", url: "/records", icon: FileText },
   { title: "Vitals", url: "/vitals", icon: HeartPulse },
@@ -365,6 +366,11 @@ export function AppSidebar() {
                       >
                         <item.icon className="w-4 h-4" />
                         <span className="font-body text-sm">{item.title}</span>
+                        {"care" in item && item.care && (
+                          <span className="ml-auto rounded-full bg-primary px-[0.48em] pt-[0.26em] pb-[0.22em] text-[0.72em] font-extrabold uppercase leading-none tracking-wider text-primary-foreground opacity-80">
+                            Care
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

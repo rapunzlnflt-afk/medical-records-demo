@@ -4,8 +4,9 @@ import Dexie, { type Table } from "dexie";
 import { addDays, format } from "date-fns";
 import type {
   Patient, Physician, Appointment, Medication, MedicationLog,
-  MedicalRecord, Vital, EmergencyContact, Pharmacy, Note, NoteUpdate,
+  MedicalRecord, Vital, EmergencyContact, Pharmacy, Note, NoteUpdate, CareEntry,
 } from "@shared/schema";
+import { buildDemoCareEntries } from "./demo-care";
 import {
   SAMPLE_DENTAL_CARD_BACK, SAMPLE_DENTAL_CARD_FRONT,
   SAMPLE_MEDICAL_CARD_BACK, SAMPLE_MEDICAL_CARD_FRONT,
@@ -23,6 +24,7 @@ class MedicalRecordsDB extends Dexie {
   pharmacies!: Table<Pharmacy, number>;
   notes!: Table<Note, number>;
   noteUpdates!: Table<NoteUpdate, number>;
+  careEntries!: Table<CareEntry, number>;
 
   constructor() {
     // Demo uses its own database name. The paid app (same origin, cleartrackapps.com)
@@ -54,6 +56,22 @@ class MedicalRecordsDB extends Dexie {
       pharmacies: "++id, patientId",
       notes: "++id, patientId, date, flaggedForDoctor",
       noteUpdates: "++id, noteId, date",
+    });
+
+    // MedRecords Care: adds only the careEntries table, matching the full app.
+    this.version(3).stores({
+      patients: "++id",
+      physicians: "++id, patientId",
+      appointments: "++id, patientId",
+      medications: "++id, patientId",
+      medicationLogs: "++id, medicationId",
+      medicalRecords: "++id, patientId",
+      vitals: "++id, patientId",
+      emergencyContacts: "++id, patientId",
+      pharmacies: "++id, patientId",
+      notes: "++id, patientId, date, flaggedForDoctor",
+      noteUpdates: "++id, noteId, date",
+      careEntries: "++id, patientId, at, [patientId+at], sourceId",
     });
   }
 }
@@ -163,6 +181,24 @@ export async function ensureDemoData(): Promise<void> {
       flaggedForDoctor: false, flaggedPhysicianId: null, createdAt: "2026-07-28T12:10:00",
     },
   ]);
+
+  // MedRecords Care sample: a fictional parent Jamie helps care for, with
+  // health conditions and a few days of care-log entries.
+  const roseId = await db.patients.add({
+    name: "Rose Rivera",
+    relationship: "Mother",
+    dateOfBirth: "1946-09-03",
+    color: "#8b5cf6",
+    bloodType: "A+",
+    height: `5'3"`,
+    allergies: "Sulfa drugs",
+    conditions: null,
+    careConditions: ["heart-failure", "dementia", "diabetes"],
+    cancerType: null,
+    careConditionOther: null,
+    careConditionsShared: true,
+  });
+  await db.careEntries.bulkAdd(buildDemoCareEntries(roseId));
 }
 
 // ==================== CRUD helpers ====================
@@ -199,6 +235,7 @@ export async function deletePatient(id: number): Promise<void> {
   if (noteIds.length > 0) await db.noteUpdates.where("noteId").anyOf(noteIds).delete();
   await db.notes.where("patientId").equals(id).delete();
   await db.physicians.where("patientId").equals(id).delete();
+  await db.careEntries.where("patientId").equals(id).delete();
   await db.patients.delete(id);
 }
 
@@ -407,6 +444,32 @@ export async function deletePharmacy(id: number): Promise<void> {
   await db.pharmacies.delete(id);
 }
 
+// --- Care log (MedRecords Care) ---
+/** Entries for one person between two local stamps (inclusive start, exclusive end), newest first. */
+export async function getCareEntries(patientId: number, fromIso: string, toIso: string): Promise<CareEntry[]> {
+  const list = await db.careEntries
+    .where("[patientId+at]")
+    .between([patientId, fromIso], [patientId, toIso], true, false)
+    .toArray();
+  return list.sort((a, b) => b.at.localeCompare(a.at) || (b.id ?? 0) - (a.id ?? 0));
+}
+export async function createCareEntry(data: Omit<CareEntry, "id">): Promise<CareEntry> {
+  const id = await db.careEntries.add(data as CareEntry);
+  return { ...data, id } as CareEntry;
+}
+export async function updateCareEntry(id: number, data: Partial<CareEntry>): Promise<CareEntry> {
+  await db.careEntries.update(id, data);
+  return (await db.careEntries.get(id))!;
+}
+export async function deleteCareEntry(id: number): Promise<void> {
+  await db.careEntries.delete(id);
+}
+/** People with at least one care-log entry (demo uses this to point visitors at the sample). */
+export async function getCarePatientIds(): Promise<number[]> {
+  const all = await db.careEntries.toArray();
+  return Array.from(new Set(all.map((e) => e.patientId)));
+}
+
 // ==================== Backup ====================
 export async function exportAllData() {
   return {
@@ -423,6 +486,7 @@ export async function exportAllData() {
     pharmacies: await db.pharmacies.toArray(),
     notes: await db.notes.toArray(),
     noteUpdates: await db.noteUpdates.toArray(),
+    careEntries: await db.careEntries.toArray(),
   };
 }
 
@@ -558,6 +622,14 @@ export async function importAllData(data: any): Promise<void> {
       const { id, ...rest } = update;
       const remappedNoteId = noteIdMap[rest.noteId];
       if (remappedNoteId) await db.noteUpdates.add({ ...rest, noteId: remappedNoteId });
+    }
+  }
+  // MedRecords Care log entries (backups from the full app include them).
+  if (data.careEntries?.length) {
+    for (const entry of data.careEntries) {
+      const { id, ...rest } = entry;
+      rest.patientId = patientIdMap[rest.patientId] || patientIdMap[1] || 1;
+      await db.careEntries.add(rest);
     }
   }
 }

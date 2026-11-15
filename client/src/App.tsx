@@ -22,6 +22,7 @@ import EmergencyContacts from "@/pages/emergency-contacts";
 import Pharmacies from "@/pages/pharmacies";
 import Notes from "@/pages/notes";
 import Timeline from "@/pages/timeline";
+import CareLog from "@/pages/care-log";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -40,6 +41,7 @@ function AppRouter() {
       <Route path="/pharmacies" component={Pharmacies} />
       <Route path="/notes" component={Notes} />
       <Route path="/timeline" component={Timeline} />
+      <Route path="/care" component={CareLog} />
       <Route component={NotFound} />
     </Switch>
   );
