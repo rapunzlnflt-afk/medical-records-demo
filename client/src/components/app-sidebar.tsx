@@ -18,7 +18,6 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTheme } from "@/lib/theme";
 import { queryClient } from "@/lib/queryClient";
-import { localTodayKey } from "@/lib/history-actions";
 import { usePatient } from "@/lib/patient-context";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
@@ -45,7 +44,11 @@ const navItems = [
 
 const AVATAR_COLORS = [
   "#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444",
+  "#0d9488", "#4f46e5", "#ea580c", "#65a30d", "#be123c", "#475569",
 ];
+
+/** MedRecords Free covers 6 people (Max and Care have no cap in the app). */
+const FREE_PEOPLE = 6;
 
 function PatientAvatar({ patient, size = "md" }: { patient: Patient; size?: "sm" | "md" }) {
   const s = size === "sm" ? "w-7 h-7 text-xs" : "w-9 h-9 text-sm";
@@ -78,7 +81,8 @@ function PatientSwitcher() {
   const createMut = useMutation({
     mutationFn: async (data: any) => {
       const existing = await getPatients();
-      if (existing.length >= 6) throw new Error("Maximum of 6 family members allowed");
+      if (existing.length >= FREE_PEOPLE)
+        throw new Error(`MedRecords Free includes ${FREE_PEOPLE} people. Get MedRecords Max to add more.`);
       return createPatient(data);
     },
     onSuccess: () => {
@@ -223,13 +227,13 @@ function PatientSwitcher() {
                 className="h-7 text-xs"
                 data-testid="input-new-patient-relationship"
               />
-              <div className="flex gap-1.5 items-center">
-                <Label className="text-[10px] text-muted-foreground">Color:</Label>
+              <div className="flex flex-wrap gap-1 items-center">
+                <Label className="w-full text-[10px] text-muted-foreground">Color:</Label>
                 {AVATAR_COLORS.map((c) => (
                   <button
                     key={c}
                     onClick={() => setNewColor(c)}
-                    className={`w-5 h-5 rounded-full border-2 transition-all ${newColor === c ? "border-foreground scale-110" : "border-transparent"}`}
+                    className={`w-11 h-11 rounded-full border-2 transition-all ${newColor === c ? "border-foreground scale-110" : "border-transparent"}`}
                     style={{ backgroundColor: c }}
                   />
                 ))}
@@ -249,7 +253,7 @@ function PatientSwitcher() {
                 </Button>
               </div>
             </div>
-          ) : patients.length < 6 ? (
+          ) : patients.length < FREE_PEOPLE ? (
             <button
               onClick={() => { setShowAdd(true); setNewColor(AVATAR_COLORS[patients.length % AVATAR_COLORS.length]); }}
               className="flex items-center gap-2 p-1.5 rounded-lg text-xs text-muted-foreground hover:bg-sidebar-accent/30 transition-colors w-full"
@@ -261,7 +265,10 @@ function PatientSwitcher() {
               Add Family Member
             </button>
           ) : (
-            <p className="text-[10px] text-muted-foreground text-center py-1">Maximum 6 members</p>
+            <p className="text-xs text-muted-foreground text-center py-1" data-testid="text-people-limit">
+              Free includes {FREE_PEOPLE} people.{" "}
+              <a href="https://cleartrackapps.com/go/medical-records/?src=demo" className="underline font-medium text-foreground">Get Max to add more</a>
+            </p>
           )}
         </div>
       )}
@@ -287,7 +294,7 @@ export function AppSidebar() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `medical-records-backup-${localTodayKey()}.json`;
+      a.download = "MedRecords-Backup.json"; // fixed name so Files offers to replace the old backup
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

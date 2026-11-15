@@ -56,9 +56,22 @@ function AppLayout() {
       <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
         <DemoBanner />
         {isMobile && (
-          <header className="flex items-center gap-2 p-3 border-b bg-card/50 backdrop-blur-sm shrink-0 z-40">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex-1" />
+          // Mirrors the app's mobile top band: 56px, 22px bold title, app icon.
+          // Only <main> scrolls here, so the band stays put without position: fixed
+          // (which would cover the demo banner above it).
+          <header className="h-[56px] flex items-center gap-[12px] px-[16px] gradient-primary text-white border-b border-white/15 shrink-0 z-40">
+            <SidebarTrigger
+              data-testid="button-sidebar-toggle"
+              className="h-[40px] w-[40px] text-white hover:bg-white/15 hover:text-white [&_svg]:!h-[26px] [&_svg]:!w-[26px] [&_svg]:stroke-[3]"
+            />
+            <span className="flex-1 pl-[4px] font-heading text-[22px] leading-none font-bold text-white">
+              MedRecords
+            </span>
+            <img
+              src={`${import.meta.env.BASE_URL}icon-192.png`}
+              alt=""
+              className="h-[40px] w-[40px] shrink-0 rounded-[8px] bg-white p-[1px] shadow-[0_2px_6px_rgba(0,0,0,0.15)]"
+            />
           </header>
         )}
         <main className="flex-1 overflow-auto flex flex-col">
