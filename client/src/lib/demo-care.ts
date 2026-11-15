@@ -55,6 +55,10 @@ function build(patientId: number, day: string, seeds: Seed[], onlyPast: boolean)
 // before the Care Log asks for caregiver entries.
 let samplePatientId: number | null = null;
 
+export function getSamplePatientId(): number | null {
+  return samplePatientId;
+}
+
 export function buildDemoCareEntries(patientId: number): CareEntry[] {
   samplePatientId = patientId;
   const today = localDay();

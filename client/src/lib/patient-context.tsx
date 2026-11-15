@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
+import { getSamplePatientId } from "./demo-care";
 import { getPatients } from "./db";
 import type { Patient } from "@shared/schema";
 
@@ -21,7 +22,11 @@ const PatientContext = createContext<PatientContextValue>({
 });
 
 export function PatientProvider({ children }: { children: ReactNode }) {
-  const [activePatientId, setActivePatientId] = useState(1);
+  // Links straight to the Care Log (the storefront's "Try the Care demo")
+  // open on the sample person who has care entries.
+  const [activePatientId, setActivePatientId] = useState(() =>
+    window.location.hash.startsWith("#/care") ? getSamplePatientId() ?? 1 : 1,
+  );
 
   const { data: patients = [], isLoading } = useQuery<Patient[]>({
     queryKey: ["patients"],
