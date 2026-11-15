@@ -1,3 +1,5 @@
+export const DEMO_DB_NAME = "MedicalRecordsKeeperDemo";
+
 import Dexie, { type Table } from "dexie";
 import { addDays, format } from "date-fns";
 import type {
@@ -23,7 +25,9 @@ class MedicalRecordsDB extends Dexie {
   noteUpdates!: Table<NoteUpdate, number>;
 
   constructor() {
-    super("MedicalRecordsKeeper");
+    // Demo uses its own database name. The paid app (same origin, cleartrackapps.com)
+    // stores real records in "MedicalRecordsKeeper", so the demo must never touch that name.
+    super(DEMO_DB_NAME);
     this.version(1).stores({
       patients: "++id",
       physicians: "++id, patientId",

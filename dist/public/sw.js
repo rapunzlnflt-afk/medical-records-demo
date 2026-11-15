@@ -1,4 +1,4 @@
-const CACHE_NAME = "medical-records-v1";
+const CACHE_NAME = "medical-records-demo-v2";
 
 // Install: cache the app shell
 self.addEventListener("install", (event) => {
@@ -20,7 +20,8 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      // Only remove this demo's own old caches; other apps on the site share CacheStorage.
+      Promise.all(keys.filter((k) => k.startsWith("medical-records-demo-") && k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
