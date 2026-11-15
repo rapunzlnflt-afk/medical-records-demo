@@ -26,7 +26,7 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
-    <script type="module" crossorigin src="./assets/index-CnmFNYCJ.js"></script>
+    <script type="module" crossorigin src="./assets/index-DBk6y4PN.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-BPuXTy6N.css">
   </head>
   <body class="font-body">
@@ -34,11 +34,15 @@
     <!-- Service worker disabled in demo to ensure clean reloads -->
     <script>
       if ("serviceWorker" in navigator) {
+        // Only remove a service worker registered for this demo's own folder.
+        // Other apps on cleartrackapps.com keep their offline support.
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          registrations.forEach(function(registration) { registration.unregister(); });
+          var demoScope = new URL("./", location.href).href;
+          registrations.forEach(function(registration) {
+            if (registration.scope.indexOf(demoScope) === 0) registration.unregister();
+          });
         });
       }
     </script>
-      <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "5673e14274004df9a11f87d759a6b624"}'></script>
   </body>
 </html>
